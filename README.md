@@ -30,7 +30,7 @@ Requirements:
 - [Tilt](https://docs.tilt.dev/install.html)
 
 ```bash
-REPO_DIR="bold-public-portal"
+REPO_DIR="barcode-data-portal"
 
 # Spool Up
 cd $REPO_DIR
