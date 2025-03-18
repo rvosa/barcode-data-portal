@@ -49,7 +49,7 @@ tilt down -f docker/Tiltfile
 Check that `.env` is configured correctly and to production values. The following assumes the ansible playbook is not being used and Couchbase is hosted on a different server.
 
 ```bash
-REPO_DIR="bold-public-portal"
+REPO_DIR="barcode-data-portal"
 
 # Spool Up
 cd $REPO_DIR
