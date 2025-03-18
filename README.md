@@ -85,8 +85,6 @@ See `CYPRESS.md`
 
 ## File Organization
 
-- `ansible`
-  - Ansible playbooks and deployment
 - `db_data`
   - Local simulated database data
 - `docker`
