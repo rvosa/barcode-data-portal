@@ -93,8 +93,6 @@ See `CYPRESS.md`
   - Main source code
   - `cypress`
     - Cypress testing configuration
-  - `docs`
-    - Additional documentation
   - `ETL`
     - Data (BCDM) extraction, transformation, and loading
   - `services`
