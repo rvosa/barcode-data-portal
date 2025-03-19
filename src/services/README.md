@@ -14,23 +14,55 @@ The services layer sits between the web views and the data access layer. It hand
 
 Each service is implemented as a FastAPI router with defined endpoints, input validation, and response models.
 
-## Service Modules
+## Service Modules and Endpoints
 
-- **ancillary.py**: Retrieves metadata and reference information from ancillary collections
-- **counts.py**: Generates metadata count statistics for queries
-- **develop.py**: Development endpoints for data manipulation (not included in schema)
-- **documents.py**: Retrieves and formats document data, handles downloads in various formats
-- **images.py**: Retrieves and processes image metadata and URLs
-- **maps.py**: Generates geographic maps based on coordinate data
-- **qr.py**: Generates QR codes for sequences and records
-- **query.py**: Handles the main search functionality, storing results in cache
-- **query_parse.py**: Parses free-text queries into structured triplet format
-- **query_preprocessor.py**: Resolves and expands query terms to match database entries
-- **stats.py**: Provides general statistics about the database
-- **summary.py**: Generates metadata summaries by aggregating fields from documents
-- **taxonomy.py**: Retrieves and processes taxonomic data, hierarchies, and maps
-- **terms.py**: Handles term lookup and autocompletion functionality
-- **test.py**: Simple test endpoints for service validation
+### ancillary.py
+Retrieves metadata and reference information from ancillary collections.
+
+### counts.py
+Generates metadata count statistics for queries.
+
+### documents.py
+Retrieves and formats document data, handles downloads in various formats.
+
+### images.py
+Retrieves and processes image metadata and URLs.
+
+### maps.py
+Generates geographic maps based on coordinate data.
+
+### qr.py
+Generates QR codes for sequences and records.
+
+### query.py
+Handles the main search functionality, storing results in cache.
+
+### query_parse.py
+Parses free-text queries into structured triplet format.
+
+### query_preprocessor.py
+Resolves and expands query terms to match database entries.
+
+### stats.py
+Provides general statistics about the database.
+
+### summary.py
+Generates metadata summaries by aggregating fields from documents.
+
+### taxonomy.py
+Retrieves and processes taxonomic data, hierarchies, and maps.
+
+### terms.py
+Handles term lookup and autocompletion functionality.
+
+### test.py
+Simple test endpoints for service validation.
+
+For specific endpoint details, parameters, and response formats, please refer to the automatically generated API documentation available at:
+- `/api/docs` (Swagger UI)
+- `/api/redoc` (ReDoc)
+
+When running the application locally, these documentation endpoints provide comprehensive information about all available API endpoints, including request parameters, response schemas, and example usage.
 
 ## Key Concepts
 
@@ -46,18 +78,33 @@ For example:
 - `geo:country:Canada` (Geography scope, country subscope, value "Canada")
 - `bin:uri:BOLD:AAA1234` (BIN scope, URI subscope, value "BOLD:AAA1234")
 
-This format allows for precise and structured data querying.
+This format provides a consistent interface across the application and allows for precise data targeting.
 
-### Caching Mechanism
+### Caching Strategy
 
-The services implement a multi-level caching strategy:
-- Redis for in-memory caching of frequently accessed data
-- File-based caching for larger result sets
-- Query IDs that encode the original query for cache lookup
+The services implement a comprehensive multi-level caching strategy as defined in the architecture:
 
-### Response Models
+#### Redis In-Memory Caching
+- Stores frequently accessed data in memory for fastest retrieval
+- Caches structured query results with configured TTL (Time-To-Live)
+- Used for API responses, autocomplete data, and term lookups
+- Managed through utility functions in [util.py](../util.py)
 
-Most services use Pydantic models to validate and structure response data, ensuring consistent API behavior.
+#### Pre-computed Summary Documents
+- Generated during ETL processes and stored in Couchbase
+- Provide aggregated data for common dimensions (taxonomy, geography, etc.)
+- Enable fast retrieval of dashboard and visualization data
+- Updated on weekly and quarterly schedules
+
+#### File-Based Query Result Caching
+- Used for larger result sets that exceed Redis memory limits
+- Implemented for document downloads and complex query results
+- Identified by encoded query IDs for efficient lookup
+- Managed by tools in the [tools](../tools) directory
+
+#### Client-Side Caching
+- Static assets configured with appropriate HTTP cache headers
+- Browser caching for JS, CSS, and images
 
 ## Integration with Overall Architecture
 
@@ -65,8 +112,8 @@ The services layer:
 
 1. **Consumes from**:
    - FastAPI routing system
-   - DAO layer (`dao.py`) for database access
-   - Utility functions (`util.py`) for caching and query processing
+   - DAO layer ([dao.py](../dao.py)) for database access
+   - Utility functions ([util.py](../util.py)) for caching and query processing
 
 2. **Produces for**:
    - API consumers (direct REST API access)
@@ -95,7 +142,7 @@ Services implement consistent error handling patterns:
 
 ## Related Components
 
-- **dao.py**: Data Access Object that services use to interact with the database
-- **util.py**: Utility functions for caching, query processing, and security
-- **views/**: Web view controllers that call these services
-- **templates/**: Jinja2 templates that render the service data
+- [dao.py](../dao.py): Data Access Object that services use to interact with the database
+- [util.py](../util.py): Utility functions for caching, query processing, and security
+- [views](../views): Web view controllers that call these services
+- [templates](../templates): Jinja2 templates that render the service data
