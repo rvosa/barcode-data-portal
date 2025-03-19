@@ -84,12 +84,12 @@ src/
 - Populated from PostgreSQL via ETL processes
 
 #### Data Access Object (DAO)
-- `dao.py`: Centralized interface for database operations
+- [dao.py](src/dao.py): Centralized interface for database operations
 - Implements query methods for various data types
 - Manages database connections and query formatting
 
 #### ETL Pipeline
-- Located in the `ETL/` directory
+- Located in the [ETL](src/ETL) directory
 - Extracts data from BOLD's internal PostgreSQL database
 - Transforms it into optimized documents
 - Loads data into Couchbase
@@ -98,66 +98,63 @@ src/
 
 ### 2. Service Layer
 
-Located in the `services/` directory, these are the RESTful API endpoints:
+Located in the [services](src/services) directory, these are the RESTful API endpoints:
 
 - **Query Services**: Search and retrieve biodiversity records
-  - `query.py`: Main search endpoint
-  - `query_parse.py`: Parses natural language to structured queries
-  - `query_preprocessor.py`: Resolves query terms
-
 - **Data Services**: Retrieve specific data types
-  - `documents.py`: Retrieve document records
-  - `summary.py`: Get aggregated data summaries
-  - `taxonomy.py`: Taxonomy-specific endpoints
-  - `images.py`: Image metadata and URLs
-  - `maps.py`: Geographic visualization data
-
 - **Utility Services**: Supporting functionality
-  - `terms.py`: Term lookup and autocompletion
-  - `qr.py`: QR code generation
-  - `stats.py`: Statistical information
+
+The services layer is described further in the [services README](src/services/README.md).
 
 ### 3. Presentation Layer
 
 #### View Controllers
-Located in the `views/` directory, these handle web page rendering:
+Located in the [views](src/views) directory, these handle web page rendering:
 
 - Page-specific controllers (index, record, bin, etc.)
 - Fetch data from services
 - Render templates with context
 - Handle URL routing
 
+The views layer is described further in the [views README](src/views/README.md).
+
 #### Templates
-Located in the `templates/` directory:
+Located in the [templates](src/templates) directory:
 
 - Base templates for consistent layout
 - Page-specific templates extending the base
 - Component templates for reusable UI elements
 - WordPress content integration templates
 
+The templates are described further in the [templates README](src/templates/README.md).
+
 #### Static Assets
-Located in the `static/` directory:
+Located in the [static](src/static) directory:
 
 - CSS for styling
 - JavaScript for client-side functionality
 - Images and other media
 - WordPress integrated assets
 
+The static assets are described further in the [templates README](src/templates/README.md).
+
 ### 4. Utility Components
 
-- `util.py`: Common functions used across the application
-- `settings.py`: Application configuration
-- `tools/`: Scripts for maintenance and operations
-- `logging.ini` and related files: Logging configuration
+- [util.py](src/util.py): Common functions used across the application
+- [settings.py](src/settings.py): Application configuration
+- [tools](src/tools): Scripts for maintenance and operations
+- [logging.ini](src/logging.ini) and related files: Logging configuration
 
 ### 5. Testing Framework
 
-Located in the `cypress/` directory:
+Located in the [cypress](src/cypress) directory:
 
 - End-to-end tests for web interface
 - API tests for service endpoints
 - User journey tests for common workflows
 - Templates for creating new tests
+
+The testing framework is described further in the [Cypress README](src/cypress/README.md).
 
 ## Key Patterns
 
@@ -280,9 +277,9 @@ Logging is implemented with:
 
 ## Related Documentation
 
-- `src/README.md`: Overview of the source code directory
-- `src/services/README.md`: Details on API services
-- `src/views/README.md`: Information on view controllers
-- `src/templates/README.md`: Template system documentation
-- `src/ETL/README.md`: ETL process documentation
-- `src/cypress/README.md`: Testing framework documentation
+- [src/README.md](src/README.md): Overview of the source code directory
+- [src/services/README.md](src/services/README.md): Details on API services
+- [src/views/README.md](src/views/README.md): Information on view controllers
+- [src/templates/README.md](src/templates/README.md): Template system documentation
+- [src/ETL/README_overview.md](src/ETL/README_overview.md): ETL process documentation
+- [src/cypress/README.md](src/cypress/README.md): Testing framework documentation
