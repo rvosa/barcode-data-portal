@@ -10,6 +10,50 @@ The ETL process is a critical part of the BOLD Public Portal architecture, handl
 2. Summary/aggregation documents for efficient querying
 3. Term index documents for search functionality
 
+## Data Flow from PostgreSQL to Couchbase
+
+The ETL pipeline follows this specific flow:
+
+1. **Extraction**: Data is extracted from the BOLD Data Submission Workbench PostgreSQL database using SQL queries against the `singlepane_view` (defined in `database_singlepane_view.sql`).
+
+2. **Transformation**: 
+   - Raw PostgreSQL records are transformed into standardized BCDM format.
+   - Data policies are applied (filtering protected or embargoed data).
+   - Summary documents are generated for taxonomic, geographic, and other dimensions.
+   - Terms are extracted and indexed for search functionality.
+
+3. **Loading**:
+   - Primary BCDM documents are loaded into Couchbase collections.
+   - Summary documents are loaded into dedicated collections.
+   - Term indexes are loaded into search-optimized collections.
+
+4. **Validation**:
+   - Post-load validation ensures data integrity.
+   - Consistency checks verify relationships between documents.
+
+## ETL and Caching Integration
+
+The ETL process integrates with the caching strategy in several key ways:
+
+1. **Pre-computed Summary Documents**:
+   - ETL scripts generate summary documents that are stored directly in Couchbase.
+   - These summaries provide pre-aggregated data for common dimensions (taxonomy, geography, institutions, etc.).
+   - The summary documents serve as a persistent cache layer, eliminating the need for expensive aggregation queries at runtime.
+
+2. **Cache Warming**:
+   - After ETL completes, cache warming scripts (in the `tools/` directory) are executed.
+   - These scripts generate cached results for common queries and store them in Redis.
+   - Pre-populating Redis with frequently accessed data improves initial response times.
+
+3. **Cache Invalidation**:
+   - ETL job completion triggers cache invalidation for affected data.
+   - Redis cache entries that depend on updated data are cleared.
+   - New cache entries are generated for updated data.
+
+4. **Static Data for Client Caching**:
+   - ETL generates certain static files (e.g., taxonomy trees, geographic boundaries) that are served as cacheable assets.
+   - These files include appropriate cache-control headers for client-side caching.
+
 ## Pipelines
 
 The ETL system has two main pipelines, documented in the markdown files:
@@ -18,6 +62,57 @@ The ETL system has two main pipelines, documented in the markdown files:
 - **Quarterly Bootstrap Pipeline** (`QUARTERLY_REBUILD_SOP.md`): Full rebuild of the database
 
 The pipelines are also visually represented in the PNG files (`Weekly_Update_Pipeline.png` and `Quarterly_Bootstrap_Pipeline.png`).
+
+## ETL Schedule and Triggers
+
+ETL jobs are run on a defined schedule with specific triggers:
+
+### Weekly Update Pipeline
+- **Schedule**: Runs every Sunday at 00:00 UTC
+- **Trigger Mechanism**: Automated cron job on the ETL server
+- **Duration**: Typically completes within 2-4 hours
+- **Scope**: Processes only new or modified records since the last run
+- **Notification**: Emails ETL completion status to the administration team
+
+### Quarterly Bootstrap Pipeline
+- **Schedule**: Runs on the first day of January, April, July, and October
+- **Trigger Mechanism**: Automated cron job with manual confirmation
+- **Duration**: Typically takes 24-48 hours to complete
+- **Scope**: Complete rebuild of all collections from source PostgreSQL data
+- **Notification**: Sends progress updates and completion notification to the administration team
+
+### Manual Triggers
+- ETL jobs can also be triggered manually via the administration interface
+- Emergency updates can be scheduled outside the regular cadence when critical data fixes are needed
+
+## Testing ETL Changes
+
+Before deploying changes to the ETL pipeline in production, the following testing process is followed:
+
+1. **Development Testing**:
+   - ETL changes are first tested against a development PostgreSQL database.
+   - Output documents are validated for schema compliance and data integrity.
+   - Unit tests verify specific transformation logic.
+
+2. **Staging Environment**:
+   - A complete ETL run is performed on the staging environment.
+   - This uses a copy or subset of production data.
+   - Staging Couchbase is populated with the results.
+
+3. **Validation Testing**:
+   - Automated tests compare record counts, key metrics, and statistical distributions between staging and production.
+   - Sample record validation ensures data quality.
+   - API tests verify that services work correctly with the transformed data.
+
+4. **Performance Testing**:
+   - ETL execution time is measured and compared to baseline.
+   - Resource usage (memory, CPU, disk I/O) is monitored.
+   - Database performance tests ensure query performance meets requirements.
+
+5. **Rollback Plan**:
+   - Each ETL deployment includes a rollback plan.
+   - Couchbase snapshots are created before running production ETL.
+   - Previous Couchbase state can be restored if issues are detected.
 
 ## Main Components
 
@@ -88,8 +183,6 @@ The main ETL process is orchestrated through the `generate_and_sanitize_data.sh`
 2. Generates summary and terms documents
 3. Creates specialized summaries for different data dimensions
 4. Sanitizes registry documents
-
-The ETL scripts are typically run on a scheduled basis (weekly or quarterly) to refresh the public portal's data.
 
 ## Related Components
 
