@@ -9,24 +9,45 @@ The BOLD Public Portal is a web application that provides public access to biodi
 The application follows a modern layered architecture with:
 - API-first design
 - Clear separation of concerns
-- Caching strategies for performance
+- Comprehensive caching strategies for performance
 - Headless CMS integration
 
 ## Tech Stack
 
 - **Backend Framework**: FastAPI (Python)
-- **Database**: Couchbase (NoSQL)
+- **Primary Database**: Couchbase (NoSQL)
+- **Source Database**: PostgreSQL (Data Submission Workbench)
 - **Caching**: Redis
 - **Frontend**: Jinja2 templates with JavaScript/jQuery
 - **Content Management**: WordPress (Headless)
 - **Testing**: Cypress (End-to-End)
+
+## Database Architecture
+
+The BOLD system uses a dual-database architecture:
+
+1. **PostgreSQL**: The primary database for the Data Submission Workbench (a separate system) where data is initially collected, curated, and managed.
+
+2. **Couchbase**: The database powering the Public Portal, populated through ETL processes from PostgreSQL. This NoSQL document store provides:
+   - Flexible schema for biodiversity data
+   - High-performance querying capabilities
+   - Document-oriented storage optimized for the Public Portal use cases
+
+Data flows from PostgreSQL to Couchbase through ETL processes that extract, transform, and load data on weekly and quarterly schedules. This separation allows the internal submission workbench to operate independently from the public-facing portal.
 
 ## Directory Structure
 
 ```
 src/
 ├── cypress/               # End-to-end testing
+│   ├── e2e/               # End-to-end tests by component
+│   │   ├── services/      # Tests for API services
+│   │   └── views/         # Tests for web views
+│   ├── user_journey/      # End-to-end user flow tests
+│   └── templates/         # Templates for new tests
 ├── ETL/                   # Extract, Transform, Load pipelines
+│   ├── couchbase-tools/   # Tools for Couchbase operations
+│   └── postprocess/       # Post-processing scripts
 ├── services/              # API service implementations
 ├── static/                # Static web assets
 │   ├── css/               # Stylesheets
@@ -51,10 +72,16 @@ src/
 
 ### 1. Data Layer
 
-#### Database: Couchbase
+#### Source Database: PostgreSQL
+- Primary database for the Data Submission Workbench
+- Contains the authoritative source data
+- Not directly accessed by the Public Portal
+
+#### Public Database: Couchbase
 - Stores primary biodiversity data and pre-computed summaries
 - NoSQL document store allows for flexible schema
 - Designed for high-performance querying
+- Populated from PostgreSQL via ETL processes
 
 #### Data Access Object (DAO)
 - `dao.py`: Centralized interface for database operations
@@ -63,7 +90,7 @@ src/
 
 #### ETL Pipeline
 - Located in the `ETL/` directory
-- Extracts data from BOLD's internal database
+- Extracts data from BOLD's internal PostgreSQL database
 - Transforms it into optimized documents
 - Loads data into Couchbase
 - Generates summary and terms collections
@@ -143,14 +170,40 @@ The application uses a "triplet" query format (`scope:subscope:value`) for struc
 
 This format provides a consistent interface across the application and allows for precise data targeting.
 
-### 2. Multi-level Caching Strategy
+### 2. Comprehensive Caching Strategy
 
-The application implements several caching layers for performance:
+The application implements a multi-layered caching approach to optimize performance:
 
-- **Redis Caching**: In-memory caching for frequently accessed data
-- **Pre-computed Summaries**: Generated during ETL for fast retrieval
-- **Query Result Caching**: Cached results for common queries
-- **Client-side Caching**: Browser caching for static assets
+#### Redis In-Memory Caching
+- Stores frequently accessed data in memory for fastest retrieval
+- Caches structured query results with configured TTL (Time-To-Live)
+- Used for API responses, autocomplete data, and term lookups
+- Managed through utility functions in `util.py`
+
+#### Pre-computed Summary Documents
+- Generated during ETL processes and stored in Couchbase
+- Provide aggregated data for common dimensions (taxonomy, geography, etc.)
+- Enable fast retrieval of dashboard and visualization data
+- Updated on weekly and quarterly schedules
+
+#### File-Based Query Result Caching
+- Used for larger result sets that exceed Redis memory limits
+- Implemented for document downloads and complex query results
+- Identified by encoded query IDs for efficient lookup
+- Managed by tools in the `tools/` directory
+
+#### Cache Generation Tools
+- Located in the `tools/` directory
+- Pre-warm caches for common queries
+- Generate and store summarized data
+- Include specialized tools for maps, taxonomy trees, and statistics
+
+#### Client-Side Caching
+- Static assets configured with appropriate HTTP cache headers
+- Browser caching for JS, CSS, and images
+- Client-side storage for user preferences and recent searches
+
+This layered approach ensures optimal performance across the application while balancing memory usage and data freshness requirements.
 
 ### 3. Headless CMS Integration
 
@@ -160,6 +213,8 @@ The application integrates with WordPress as a headless CMS:
 - Templates include WordPress-generated HTML
 - Static assets from WordPress are served directly
 - Consistent styling between CMS and application content
+
+**Note**: The exact implementation details of the WordPress integration require further clarification from the BOLD designers at CBG in Guelph.
 
 ## Data Flow
 
@@ -174,7 +229,7 @@ The application integrates with WordPress as a headless CMS:
 
 ### 2. ETL Data Flow
 
-1. Data is extracted from BOLD's internal database
+1. Data is extracted from BOLD's internal PostgreSQL database
 2. Raw data is transformed into standardized BCDM format
 3. Summary documents are generated for key dimensions
 4. Terms are extracted and indexed for search
@@ -220,6 +275,8 @@ Logging is implemented with:
 - Expanded microservice architecture
 - Enhanced caching strategies
 - GraphQL API layer
+- Implementation of CI/CD pipeline based on prior art developed at Naturalis in Leiden
+- Improved automated testing integration
 
 ## Related Documentation
 
