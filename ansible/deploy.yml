@@ -1,0 +1,9 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Deploy EU Bold
+      include_role:
+        name: deploy
+        apply:
+          tags: deploy
+      tags: deploy

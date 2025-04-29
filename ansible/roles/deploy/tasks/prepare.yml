@@ -1,0 +1,31 @@
+---
+
+- name: Create project dir
+  ansible.builtin.file:
+    dest: /opt/compose_projects/{{ project }}
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create data directory
+  ansible.builtin.file:
+    dest: /data/
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create data subdirectories
+  ansible.builtin.file:
+    dest: "/data/{{ item.dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop:
+    - { dir: backup, group: root, owner: root }
+    - { dir: couchbase, group: root, owner: root }
+    - { dir: letsencrypt, group: root, owner: root }
+    - { dir: log, group: root, owner: root }
+    - { dir: sample_data, group: root, owner: root }

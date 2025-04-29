@@ -1,12 +1,14 @@
+import os
 import pathlib
 
 from pydantic_settings import BaseSettings
+from pydantic import Field
 
 
 class Settings(BaseSettings):
     app_root: str = pathlib.Path(__file__).parent.resolve().as_posix()
-    app_name: str = "fastapi-app"
-    app_port: int = 8000
+    app_name: str = Field(8000, env="APP_NAME")
+    app_port: int = Field(8000, env="APP_PORT")
 
     log_config_path: str = (
         pathlib.Path(__file__).with_name("logging.ini").resolve().as_posix()
