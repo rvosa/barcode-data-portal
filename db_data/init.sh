@@ -51,20 +51,20 @@ done
 
 # Check if the cluster is already initialized
 log "$(date +"%T") Reading cluster ........."
-if couchbase-cli server-list -c 127.0.0.1 --username $COUCHBASE_USER --$COUCHBASE_PASSWORD $COUCHBASE_PASSWORD | grep -q ERROR; then
+if couchbase-cli server-list -c 127.0.0.1 --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD | grep -q ERROR; then
     # Setup index and memory quota
     log "$(date +"%T") Init cluster ........."
-    couchbase-cli cluster-init -c 127.0.0.1 --cluster-username $COUCHBASE_USER --cluster-$COUCHBASE_PASSWORD $COUCHBASE_PASSWORD \
+    couchbase-cli cluster-init -c 127.0.0.1 --cluster-username $COUCHBASE_USER --cluster-password $COUCHBASE_PASSWORD \
     --cluster-name BPDP_DevCluster --cluster-ramsize 1024 --cluster-index-ramsize 1024 --services data,index,query \
     --index-storage-setting default
 
     # Create the buckets
     log "$(date +"%T") Create buckets ........."
-    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --$COUCHBASE_PASSWORD $COUCHBASE_PASSWORD --bucket BCDM \
+    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --bucket BCDM \
         --bucket-type couchbase --bucket-ramsize 512
-    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --$COUCHBASE_PASSWORD $COUCHBASE_PASSWORD --bucket DERIVED \
+    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --bucket DERIVED \
         --bucket-type couchbase --bucket-ramsize 256
-    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --$COUCHBASE_PASSWORD $COUCHBASE_PASSWORD --bucket ANCILLARY \
+    couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --bucket ANCILLARY \
         --bucket-type couchbase --bucket-ramsize 128
 
     # Insert data into the buckets
