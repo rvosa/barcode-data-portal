@@ -71,6 +71,7 @@ services:
       - --global.sendAnonymousUsage=false
       - --providers.docker.exposedByDefault=false
       - --providers.docker.endpoint=tcp://docker-socket-proxy:2375
+      - --providers.file.filename=/traefik-dynamic-config.toml
       - --providers.docker.network=docker-socket-proxy
       - --log.level=ERROR
       - --entrypoints.web.address=:8000
