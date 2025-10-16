@@ -135,13 +135,13 @@ Image build:
     - source docker/export_cache_tags.sh
     - docker/build_and_push.sh
 
-# Only run test before deployment, as it takes ages
+# Only run test before production deployment, as it takes ages
 Cypress test:
   <<: *job_id_tokens
   stage: test
   rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_TAG == null && $CI_COMMIT_BRANCH != null
+    - if: $CI_PIPELINE_SOURCE == "trigger" && $CI_COMMIT_TAG != null
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_TAG != null
   image: docker:24
   allow_failure: true
   services:
@@ -237,6 +237,6 @@ Production deploy:
     - ansible/pull_vault_secrets.sh
   script:
     - source ansible/export_image_version.sh
-    - docker run -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e ANSIBLE_CONFIG=/runner/ansible/ansible.cfg -e IMAGE_VERSION -e CI_REGISTRY -e CI_REGISTRY_USER -e CI_REGISTRY_PASSWORD -t -v "$CI_PROJECT_DIR/:/runner/" -v "$CI_PROJECT_DIR/ansible/secrets/:/root/.ssh" -w /runner registry.gitlab.com/naturalis/lib/ansible/docker-ansible:latest ansible-playbook -i "ansible/inventory/hosts.yml" ansible/deploy.yml -l ${LIMIT:-'prod'}
+    - docker run -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e ANSIBLE_CONFIG=/runner/ansible/ansible.cfg -e IMAGE_VERSION -e CI_REGISTRY -e CI_REGISTRY_USER -e CI_REGISTRY_PASSWORD -e IMPORT_REGISTRY_TOKEN -t -v "$CI_PROJECT_DIR/:/runner/" -v "$CI_PROJECT_DIR/ansible/secrets/:/root/.ssh" -w /runner registry.gitlab.com/naturalis/lib/ansible/docker-ansible:latest ansible-playbook -i "ansible/inventory/hosts.yml" ansible/deploy.yml -l ${LIMIT:-'prod'}
   after_script:
     - rm -rf ansible/secrets/

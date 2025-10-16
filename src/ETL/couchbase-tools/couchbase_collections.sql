@@ -1,25 +1,44 @@
 -- BUCKET: BCDM
 
-CREATE COLLECTION `BCDM`.`_default`.`primary` IF NOT EXISTS;
+DROP COLLECTION `BCDM`.`_default`.`primary`;
+CREATE COLLECTION `BCDM`.`_default`.`primary`;
 
 -- BUCKET: DERIVED
 
-CREATE COLLECTION `DERIVED`.`_default`.`accepted_terms` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`tax_geo_inst_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`country_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`institution_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`sequence_run_site_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`bin_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`dataset_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`primer_summaries` IF NOT EXISTS;
-CREATE COLLECTION `DERIVED`.`_default`.`taxonomy_summaries` IF NOT EXISTS;
+DROP COLLECTION `DERIVED`.`_default`.`accepted_terms`;
+DROP COLLECTION `DERIVED`.`_default`.`tax_geo_inst_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`country_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`institution_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`sequence_run_site_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`bin_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`dataset_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`primer_summaries`;
+DROP COLLECTION `DERIVED`.`_default`.`taxonomy_summaries`;
+
+CREATE COLLECTION `DERIVED`.`_default`.`accepted_terms`;
+CREATE COLLECTION `DERIVED`.`_default`.`tax_geo_inst_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`country_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`institution_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`sequence_run_site_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`bin_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`dataset_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`primer_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`taxonomy_summaries`;
 
 -- BUCKET: ANCILLARY
 
-CREATE COLLECTION `ANCILLARY`.`_default`.`barcodeclusters` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`datasets` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`publications` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`countries` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`institutions` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`primers` IF NOT EXISTS;
-CREATE COLLECTION `ANCILLARY`.`_default`.`taxonomies` IF NOT EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`barcodeclusters`;
+DROP COLLECTION `ANCILLARY`.`_default`.`datasets`;
+DROP COLLECTION `ANCILLARY`.`_default`.`publications`;
+DROP COLLECTION `ANCILLARY`.`_default`.`countries`;
+DROP COLLECTION `ANCILLARY`.`_default`.`institutions`;
+DROP COLLECTION `ANCILLARY`.`_default`.`primers`;
+DROP COLLECTION `ANCILLARY`.`_default`.`taxonomies`;
+
+CREATE COLLECTION `ANCILLARY`.`_default`.`barcodeclusters`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`datasets`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`publications`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`countries`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`institutions`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`primers`;
+CREATE COLLECTION `ANCILLARY`.`_default`.`taxonomies`;

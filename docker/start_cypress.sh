@@ -15,5 +15,4 @@ docker create \
   npx cypress install
   npx cypress run"
 
-#docker network connect angular-bioportal_drupal angular-bioportal_cypress
 docker start --attach barcode-data-portal_cypress

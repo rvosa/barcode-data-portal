@@ -1,0 +1,29 @@
+services:
+  fastapi-app:
+    # Basic authentication to shield off the site with a login
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.uvicorn.tls=true
+      - traefik.http.routers.uvicorn.middlewares=uvicorn-auth
+      - traefik.http.routers.uvicorn.rule=Host(`${FQDN:-dev.boldsystems.eu}`)
+      - traefik.http.routers.uvicorn.entrypoints=websecure
+      - traefik.http.routers.uvicorn.tls.certresolver=route53
+      - traefik.http.middlewares.redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.uvicorn-auth.basicauth.realm="EU Bold"
+      - traefik.http.middlewares.uvicorn-auth.basicauth.users=${BASIC_AUTH:?Add BASIC_AUTH to env file to enable basic authentication}
+
+  couchbase:
+    # Option to replace existing cluster with example data
+    entrypoint: /db_data/init.sh ${COUCHBASE_DROP_CLUSTER_ON_START:-false}
+    # Provide access to Couchbase web UI on subdomain
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.couchbase-http.rule=Host(`${COUCHBASE_FQDN:-couchbase.dev.boldsystems.eu}`)
+      - traefik.http.routers.couchbase-http.entrypoints=web
+      - traefik.http.routers.couchbase-http.middlewares=https-redirect
+      - traefik.http.routers.couchbase.rule=Host(`${COUCHBASE_FQDN:-couchbase.dev.boldsystems.eu}`)
+      - traefik.http.routers.couchbase.entrypoints=websecure
+      - traefik.http.routers.couchbase.tls.certresolver=route53
+      - traefik.http.services.couchbase.loadbalancer.server.port=8091
+      - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true

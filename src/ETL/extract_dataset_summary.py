@@ -18,7 +18,7 @@ _SPECIMEN_CENTRIC = [
 
 
 def round_coords(record, digits):
-    if "coord" in record and len(record["coord"]) == 2:
+    if record.get("coord") is not None and len(record["coord"]) == 2:
         record["coord"] = (
             round(record["coord"][0], digits),
             round(record["coord"][1], digits),
@@ -27,7 +27,7 @@ def round_coords(record, digits):
 
 
 def format_date_for_summary(record, datefield):
-    if datefield in record and len(record[datefield]) > 5:
+    if record.get(datefield) is not None and len(record[datefield]) > 5:
         record[datefield] = record[datefield][:7]
     return record
 

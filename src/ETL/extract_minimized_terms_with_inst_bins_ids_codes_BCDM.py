@@ -72,11 +72,11 @@ for jline in sys.stdin:
         key.append(record.get(field, None))
 
     for field in tax_ranks:
-        if field in record and len(record[field]) > 1:
+        if record.get(field) is not None and len(record[field]) > 1:
             tax_dict[field] = record[field]
 
     for field in geo_ranks:
-        if field in record and len(record[field]) > 1:
+        if record.get(field) is not None and len(record[field]) > 1:
             geo_dict[field] = record[field]
 
     tax_geo_inst_key = tuple(key)
@@ -85,13 +85,13 @@ for jline in sys.stdin:
     if record["processid"] not in pid_map:
         pid_map[record["processid"]] = len(pid_map)
 
-    if "coord" in record and len(record["coord"]) == 2:
+    if record.get("coord") is not None and len(record["coord"]) == 2:
         record["coord"] = (round(record["coord"][0], 1), round(record["coord"][1], 1))
 
-    if "sequence_upload_date" in record and len(record["sequence_upload_date"]) > 5:
+    if record.get("sequence_upload_date") is not None and len(record["sequence_upload_date"]) > 5:
         record["sequence_upload_date"] = record["sequence_upload_date"][:7]
 
-    if "collection_date_start" in record and len(record["collection_date_start"]) > 5:
+    if record.get("collection_date_start") is not None and len(record["collection_date_start"]) > 5:
         record["collection_date_start"] = record["collection_date_start"][:7]
 
     # term assembly
@@ -118,7 +118,7 @@ for jline in sys.stdin:
 
     scope = "ids"
     for rank in ids_ranks:
-        if rank in record:
+        if record.get(rank) is not None:
             field_name = rank
             term = (
                 record.get(field_name).strip().lower().translate(str_sanitize_mapping)
@@ -138,7 +138,7 @@ for jline in sys.stdin:
 
     scope = "bin"
     field_name = "bin_uri"
-    if field_name in record:
+    if record.get(field_name) is not None:
         term = record.get(field_name).strip().lower().translate(str_sanitize_mapping)
         if len(term) > 1:
             terms.setdefault(
@@ -155,7 +155,7 @@ for jline in sys.stdin:
 
     scope = "inst"
     field_name = "inst"
-    if field_name in record:
+    if record.get(field_name) is not None:
         term = record.get(field_name).strip().lower().translate(str_sanitize_mapping)
         if len(term) > 1:
             terms.setdefault(
@@ -172,7 +172,7 @@ for jline in sys.stdin:
 
     scope = "recordsetcode"
     field_name = "bold_recordset_code_arr"
-    if field_name in record:
+    if record.get(field_name) is not None:
         recordset_terms = record.get(field_name)
         for term in recordset_terms:
             original_term = term
