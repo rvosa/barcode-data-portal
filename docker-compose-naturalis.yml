@@ -23,6 +23,8 @@ services:
       - backend
     env_file:
       - .env
+    volumes:
+      - ${DATA_PATH:-/data}/import:/import
     depends_on:
       socketserver-logging:
         condition: service_started
@@ -31,7 +33,7 @@ services:
       couchbase:
         condition: service_healthy
 
-  # Leave this for now, but better to just log to stdout/-err in the future?
+  # Leave this for now, but logging to stdout/-err should suffice
   socketserver-logging:
     image: registry.gitlab.com/naturalis/bii/bge/barcode-data-portal/socketserver-logging:${IMAGE_VERSION:-latest}
 #    build:
@@ -102,12 +104,6 @@ services:
   couchbase:
     image: couchbase:enterprise
     restart: unless-stopped
-    ports:
-#      - "8091-8097:8091-8097" # Do not expose the non-encrypted web UI ports
-      - "18091-18097:18091-18097"
-      - "11207:11207"
-      - "11210:11210"
-      - "11280:11280"
     healthcheck:
       test: curl --silent http://127.0.0.1:8091/pools > /dev/null
       interval: 10s
@@ -122,8 +118,6 @@ services:
     volumes:
       - ${DATA_PATH:-/data}/sample_data:/db_data
       - ${DATA_PATH:-/data}/couchbase:/opt/couchbase/var
-    # This probably needs to be adjusted as well, as we don't want to accidentally drop the cluster!
-    entrypoint: /db_data/init.sh ${COUCHBASE_DROP_CLUSTER_ON_START:-true}
 
   docker-socket-proxy:
     image: registry.gitlab.com/naturalis/lib/docker/docker-socket-proxy

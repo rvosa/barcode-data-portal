@@ -27,9 +27,9 @@
     owner: root
     group: root
 
-- name: Copy Traefik basic authentification as docker override file
+- name: Copy development file (basic auth and Couchbase web UI) as docker override
   ansible.builtin.copy:
-    src: '{{ playbook_dir }}/../docker-compose-naturalis-basic-auth.yml'
+    src: '{{ playbook_dir }}/../docker-compose-naturalis-dev.yml'
     dest: /opt/compose_projects/{{ project }}/docker-compose.override.yml
     mode: "0644"
     owner: root
@@ -61,6 +61,8 @@
       COUCHBASE_PASSWORD={{ couchbase_password }}
       FASTAPI_NR_WORKERS={{ fastapi_nr_workers | default(4) }}
       BASIC_AUTH={{ basic_auth }}
+      IMPORT_REGISTRY_TOKEN={{ import_registry_token }}
+      IMPORT_DIR="/import"
     dest: /opt/compose_projects/{{ project }}/.env
     mode: "0600"
     owner: root

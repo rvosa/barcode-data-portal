@@ -20,12 +20,13 @@
   ansible.builtin.file:
     dest: "/data/{{ item.dir }}"
     state: directory
-    mode: "0755"
+    mode: "0777"
     owner: "{{ item.owner }}"
     group: "{{ item.group }}"
   loop:
     - { dir: backup, group: root, owner: root }
     - { dir: couchbase, group: root, owner: root }
+    - { dir: import, group: root, owner: root }
     - { dir: letsencrypt, group: root, owner: root }
     - { dir: log, group: root, owner: root }
     - { dir: sample_data, group: root, owner: root }

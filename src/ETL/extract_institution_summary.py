@@ -60,7 +60,7 @@ def main(args):
                 pid_map[record["processid"]] = len(pid_map)
 
             # rounding off geo coord
-            if "coord" in record and len(record["coord"]) == 2:
+            if record.get("coord") is not None and len(record["coord"]) == 2:
                 record["coord"] = (
                     round(record["coord"][0], 1),
                     round(record["coord"][1], 1),
@@ -68,13 +68,13 @@ def main(args):
 
             # picking up month and year only from dates
             if (
-                "sequence_upload_date" in record
+                record.get("sequence_upload_date") is not None
                 and len(record["sequence_upload_date"]) > 5
             ):
                 record["sequence_upload_date"] = record["sequence_upload_date"][:7]
 
             if (
-                "collection_date_start" in record
+                record.get("collection_date_start") is not None
                 and len(record["collection_date_start"]) > 5
             ):
                 record["collection_date_start"] = record["collection_date_start"][:7]

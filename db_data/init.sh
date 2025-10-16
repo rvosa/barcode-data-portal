@@ -67,7 +67,7 @@ if couchbase-cli server-list -c 127.0.0.1 --username $COUCHBASE_USER --password 
     couchbase-cli bucket-create -c 127.0.0.1 --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --bucket ANCILLARY \
         --bucket-type couchbase --bucket-ramsize 128
 
-    # Insert data into the buckets
+    # Create the collections
     couchbase-cli collection-manage -c 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket BCDM --create-collection _default.primary
     couchbase-cli collection-manage -c 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket DERIVED --create-collection _default.accepted_terms
     couchbase-cli collection-manage -c 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket DERIVED --create-collection _default.tax_geo_inst_summaries
@@ -86,7 +86,8 @@ if couchbase-cli server-list -c 127.0.0.1 --username $COUCHBASE_USER --password 
     couchbase-cli collection-manage -c 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket ANCILLARY --create-collection _default.primers
     couchbase-cli collection-manage -c 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket ANCILLARY --create-collection _default.taxonomies
 
-    log "$(date +"%T") Inserting data into buckets ........."
+    # Insert data into the buckets
+   log "$(date +"%T") Inserting data into buckets ........."
     cbimport json --cluster 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket BCDM --scope-collection-exp _default.primary \
         --format lines --dataset file:///db_data/BCDM.jsonl --generate-key '%record_id%'
     cbimport json --cluster 127.0.0.1 -u $COUCHBASE_USER -p $COUCHBASE_PASSWORD --bucket DERIVED --scope-collection-exp _default.accepted_terms \
