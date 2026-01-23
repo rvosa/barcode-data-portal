@@ -1,5 +1,5 @@
 ---
-project: "eu-bold"
+project: "fastapi_app"
 ansible_ci: true
 docker_compose: /usr/bin/docker compose
 docker_compose_version: 2

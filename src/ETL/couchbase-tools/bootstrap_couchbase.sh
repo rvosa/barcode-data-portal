@@ -55,6 +55,7 @@ printf "\nLoad primer registry\n"
 python ETL/couchbase-tools/bulk_load_documents.py --verbosity $VERBOSITY --bucket ANCILLARY --collection primers --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'name' --file $IMPORT_DIR/bold_primer_registry.jsonl
 printf "\nLoad taxonomy registry\n"
 python ETL/couchbase-tools/bulk_load_documents.py --verbosity $VERBOSITY --bucket ANCILLARY --collection taxonomies --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'taxid' --file $IMPORT_DIR/bold_taxonomy_registry.jsonl
+printf "\n"
 
-printf "Step 5: Generate indexes\n"
+printf "\nStep 5: Generate indexes\n"
 python ETL/couchbase-tools/run_query.py --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --file ETL/couchbase-tools/couchbase_index_definitions.sql

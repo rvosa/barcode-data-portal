@@ -2,7 +2,7 @@
 # This file is used to build the Docker image of the application
 #
 # Use an official Python runtime as a parent image
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # The ETL requires jq to generate Couchbase import files and git to fetch registry files
 # hadolint ignore=DL3008
