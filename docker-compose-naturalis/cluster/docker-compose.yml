@@ -1,0 +1,32 @@
+services:
+  fastapi-app:
+    # Flexible tag instead of image path
+    image: registry.gitlab.com/naturalis/bii/bge/barcode-data-portal/fastapi-app:${IMAGE_VERSION:-latest}
+    restart: unless-stopped
+    # Dynamic number of workers, as this seems to be the only different betweens staging and production environments
+    command: gunicorn main:app --workers ${FASTAPI_NR_WORKERS:-8} --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    # As APP_PORT is specified in .env, why not use that instead of hard-coding it
+    ports:
+      - "8000:${APP_PORT:-8000}"
+    # Using Traefik to add the Route53 certificate
+    networks:
+      - backend
+    env_file:
+      - .env
+    volumes:
+      - ${DATA_PATH:-/data}/import:/import
+    depends_on:
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:7.0-bookworm
+    restart: unless-stopped
+    ports:
+      - "6379:${REDIS_PORT:-6379}"
+    networks:
+      - backend
+
+networks:
+  backend:
+    internal: false
