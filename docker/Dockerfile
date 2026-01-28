@@ -8,6 +8,7 @@ FROM python:3.11-slim
 # hadolint ignore=DL3008
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install --no-install-recommends -y git jq; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*;
