@@ -173,7 +173,7 @@ async def lookup_specimen_in_disscover(
 
     search_strategies = [
         # Primary: Exact filter match on physicalSpecimenId
-        {"$filter.physicalSpecimenId": museum_id, "pageSize": "10"},
+        {"physicalSpecimenId": museum_id, "pageSize": "10"},
         # Fallback: Free-text search
         {"q": museum_id, "pageSize": "10"},
     ]
