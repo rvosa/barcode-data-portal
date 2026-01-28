@@ -1,0 +1,273 @@
+{% extends "includes/base.jinja2" %}
+{% block title %} - DiSSCo Sample Tracking{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        // Initialize DataTable for tracking results
+        let trackingTable = $('#tracking-results-table').DataTable({
+            "paging": true,
+            "pageLength": 25,
+            "searching": true,
+            "ordering": true,
+            "order": [[0, "asc"]],
+            "columns": [
+                { "data": "bold_identifier" },
+                { "data": "dissco_status" },
+                { "data": "dissco_id" },
+                { "data": "institution" }
+            ],
+            "columnDefs": [
+                {
+                    "targets": 1,
+                    "render": function(data, type, row) {
+                        if (data === "found") {
+                            return '<span class="badge badge-success"><i class="fa fa-check"></i> Found</span>';
+                        } else {
+                            return '<span class="badge badge-secondary"><i class="fa fa-times"></i> Not Found</span>';
+                        }
+                    }
+                },
+                {
+                    "targets": 2,
+                    "render": function(data, type, row) {
+                        if (data) {
+                            return '<a href="' + row.specimen_url + '" target="_blank" class="navy-link">' + 
+                                   data.split('/').pop() + ' <i class="fa fa-external-link"></i></a>';
+                        }
+                        return '-';
+                    }
+                }
+            ]
+        });
+
+        // Handle track button click
+        $('#track-samples-btn').click(function() {
+            let identifiers = $('#sample-identifiers').val()
+                .split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+            
+            if (identifiers.length === 0) {
+                alert('Please enter at least one sample identifier');
+                return;
+            }
+
+            $('#tracking-spinner').show();
+            $('#tracking-results').hide();
+
+            $.ajax({
+                url: '/api/dissco/track',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    identifiers: identifiers,
+                    identifier_type: $('#identifier-type').val(),
+                    fields_requested: ['institution', 'specimen_status', 'last_modified']
+                }),
+                success: function(response) {
+                    $('#tracking-spinner').hide();
+                    $('#tracking-results').show();
+
+                    // Update summary
+                    $('#tracking-id').text(response.tracking_id);
+                    $('#total-requested').text(response.total_requested);
+                    $('#matched-count').text(response.matched);
+                    $('#unmatched-count').text(response.unmatched);
+
+                    // Update institutions summary
+                    let instHtml = '';
+                    for (let inst in response.institutions_summary) {
+                        instHtml += '<li>' + inst + ': ' + response.institutions_summary[inst] + ' specimens</li>';
+                    }
+                    if (instHtml) {
+                        $('#institutions-list').html(instHtml);
+                    } else {
+                        $('#institutions-list').html('<li>No specimens matched</li>');
+                    }
+
+                    // Update table
+                    let tableData = response.results.map(r => ({
+                        bold_identifier: r.bold_identifier,
+                        dissco_status: r.dissco_status,
+                        dissco_id: r.dissco_id || null,
+                        institution: r.institution || '-',
+                        specimen_url: r.dissco_id ? 'https://disscover.disco.eu/specimen/' + r.dissco_id.split('/').pop() : null
+                    }));
+                    
+                    trackingTable.clear();
+                    trackingTable.rows.add(tableData);
+                    trackingTable.draw();
+                },
+                error: function(xhr) {
+                    $('#tracking-spinner').hide();
+                    alert('Error tracking samples: ' + (xhr.responseJSON?.detail || 'Unknown error'));
+                }
+            });
+        });
+    });
+</script>
+<style>
+    .tracking-summary-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .tracking-stat {
+        text-align: center;
+        padding: 15px;
+    }
+    .tracking-stat h3 {
+        font-size: 2.5em;
+        margin: 0;
+        color: #1ab394;
+    }
+    .tracking-stat p {
+        margin: 5px 0 0;
+        color: #666;
+    }
+    .badge-success {
+        background-color: #1ab394;
+    }
+    .badge-secondary {
+        background-color: #6c757d;
+    }
+    #tracking-spinner {
+        display: none;
+        text-align: center;
+        padding: 40px;
+    }
+    #tracking-results {
+        display: none;
+    }
+    .dissco-logo {
+        max-height: 60px;
+        margin-right: 15px;
+    }
+    .dissco-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section id="features" class="container services">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <div class="dissco-header">
+                        <img src="/static/img/dissco-logo.png" alt="DiSSCo Logo" class="dissco-logo" onerror="this.style.display='none'">
+                        <div>
+                            <h1>DiSSCo Sample Tracking</h1>
+                            <p class="text-muted">Track your BOLD specimens across the DiSSCo network of European natural science collections</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="form-group">
+                                <label for="sample-identifiers"><strong>Sample Identifiers</strong></label>
+                                <textarea id="sample-identifiers" class="form-control" rows="10" 
+                                    placeholder="Enter one identifier per line:&#10;SAMPLE001&#10;SAMPLE002&#10;SAMPLE003"></textarea>
+                                <small class="form-text text-muted">Enter Sample IDs, Process IDs, or Museum IDs (one per line)</small>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="form-group">
+                                <label for="identifier-type"><strong>Identifier Type</strong></label>
+                                <select id="identifier-type" class="form-control">
+                                    <option value="sampleid">Sample ID</option>
+                                    <option value="processid">Process ID</option>
+                                    <option value="museumid">Museum ID</option>
+                                </select>
+                            </div>
+                            <div class="alert alert-info">
+                                <h5><i class="fa fa-info-circle"></i> About DiSSCo Integration</h5>
+                                <p>This tool searches the <a href="https://disscover.disco.eu" target="_blank">DiSSCo network</a> 
+                                to find physical specimens that correspond to your DNA barcode records.</p>
+                                <p><strong>What you'll discover:</strong></p>
+                                <ul>
+                                    <li>Which specimens exist in European collections</li>
+                                    <li>The holding institution for each specimen</li>
+                                    <li>Direct links to specimen records in DiSSCo</li>
+                                </ul>
+                            </div>
+                            <button id="track-samples-btn" class="btn btn-primary btn-lg">
+                                <i class="fa fa-search"></i> Track Samples in DiSSCo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tracking-spinner">
+                <div class="sk-spinner sk-spinner-cube-grid">
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                    <div class="sk-cube"></div>
+                </div>
+                <p>Searching DiSSCo network...</p>
+            </div>
+
+            <div id="tracking-results">
+                <div class="ibox">
+                    <div class="ibox-content">
+                        <div class="navy-line"></div>
+                        <h1>Tracking Results</h1>
+                        <p>Tracking ID: <strong id="tracking-id"></strong></p>
+                        
+                        <div class="tracking-summary-card">
+                            <div class="row">
+                                <div class="col-md-4 tracking-stat">
+                                    <h3 id="total-requested">0</h3>
+                                    <p>Total Requested</p>
+                                </div>
+                                <div class="col-md-4 tracking-stat">
+                                    <h3 id="matched-count" style="color: #1ab394;">0</h3>
+                                    <p>Found in DiSSCo</p>
+                                </div>
+                                <div class="col-md-4 tracking-stat">
+                                    <h3 id="unmatched-count" style="color: #6c757d;">0</h3>
+                                    <p>Not Found</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h4>Institutions Summary</h4>
+                                <ul id="institutions-list"></ul>
+                            </div>
+                            <div class="col-md-8">
+                                <h4>Detailed Results</h4>
+                                <table id="tracking-results-table" class="table table-striped table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>BOLD Identifier</th>
+                                            <th>DiSSCo Status</th>
+                                            <th>DiSSCo ID</th>
+                                            <th>Institution</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
