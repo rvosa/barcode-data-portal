@@ -58,26 +58,28 @@ In the Barcode Core Data Model (BCDM), the `museumid` field stores the catalog n
 - `ZMB.ARA.67890` (Museum für Naturkunde Berlin)
 - `NHMUK.ENT.12345` (Natural History Museum London)
 
-### Relevant Existing Files
-| File | Purpose |
-|------|---------|
-| `src/services/dissco.py` | **EXISTS** - Currently has mock implementation, needs real API calls |
-| `src/views/record.py` | View controller for specimen record pages |
-| `src/templates/record.jinja2` | **EXISTS** - Template with DiSSCo panel, needs refinement |
-| `src/settings.py` | **EXISTS** - Has DiSSCo settings, needs URL update |
-| `src/util.py` | Utility functions including caching |
+### Files to Create or Modify
+| File | Status | Action Required |
+|------|--------|-----------------|
+| `src/services/dissco.py` | **CREATE** | New service module for DiSSCover API integration |
+| `src/views/record.py` | EXISTS | View controller for specimen record pages (no changes needed) |
+| `src/templates/record.jinja2` | EXISTS | Template for record pages - **ADD** DiSSCo panel |
+| `src/settings.py` | EXISTS | Configuration file - **ADD** DiSSCo settings |
+| `src/util.py` | EXISTS | Utility functions including caching (no changes needed) |
+| `src/main.py` | EXISTS | FastAPI application - **ADD** DiSSCo route registration |
 
-### Existing Configuration (in `src/settings.py`)
+### Configuration to Add (in `src/settings.py`)
+
+Add the following settings to the `Settings` class:
+
 ```python
-# DiSSCo Integration Settings - CURRENTLY SET TO:
-dissco_api_url: str = "https://disscover.disco.eu/api/v1"  # NEEDS UPDATE
+# DiSSCo Integration Settings
+dissco_api_url: str = "https://dev.dissco.tech/api"  # Use dissco.tech/api for production
 dissco_api_key: str = ""  # Not needed - API is public
-dissco_timeout: int = 30  # OK
-dissco_cache_ttl: int = 3600  # OK (1 hour)
-dissco_enabled: bool = True  # Feature flag - OK
+dissco_timeout: int = 30  # Request timeout in seconds
+dissco_cache_ttl: int = 3600  # Cache TTL (1 hour)
+dissco_enabled: bool = True  # Feature flag for DiSSCo integration
 ```
-
-**CORRECTION NEEDED**: The `dissco_api_url` should be updated to `https://dev.dissco.tech/api` for development or `https://dissco.tech/api` for production.
 
 ---
 
@@ -221,28 +223,33 @@ Note: Process IDs and Sample IDs are BOLD-specific and may not be indexed in DiS
 
 ## 4. Implementation Tasks
 
-### Task 1: Update Settings
+### Task 1: Add DiSSCo Settings
 
 **File**: `src/settings.py`
 
-**Change**: Update `dissco_api_url` default value:
+**Action**: Add DiSSCo integration settings to the `Settings` class.
+
+Find the `Settings` class definition and add the following settings:
+
 ```python
-# FROM:
-dissco_api_url: str = "https://disscover.disco.eu/api/v1"
-
-# TO:
-dissco_api_url: str = "https://dev.dissco.tech/api"
+class Settings(BaseSettings):
+    # ... existing settings ...
+    
+    # DiSSCo Integration Settings
+    dissco_api_url: str = "https://dev.dissco.tech/api"  # Use dissco.tech/api for production
+    dissco_api_key: str = ""  # Not needed - API is public
+    dissco_timeout: int = 30  # Request timeout in seconds
+    dissco_cache_ttl: int = 3600  # Cache TTL (1 hour)
+    dissco_enabled: bool = True  # Feature flag for DiSSCo integration
 ```
-
-**Note**: The `dissco_api_key` setting can remain empty as the API is public.
 
 ---
 
-### Task 2: Implement Real DiSSCover API Client
+### Task 2: Create DiSSCover API Service
 
-**File**: `src/services/dissco.py`
+**File**: `src/services/dissco.py` (**CREATE NEW FILE**)
 
-**Replace the mock `_mock_dissco_specimen_lookup` function** with a real implementation that:
+**Action**: Create a new service module that:
 
 1. Makes HTTP requests to DiSSCover API using `httpx`
 2. Uses `$filter.physicalSpecimenId` with the BCDM `museumid` as the **primary** search strategy
@@ -529,11 +536,15 @@ class DiSSCoSpecimenResponse(BaseModel):
 
 ---
 
-### Task 4: Update Frontend Template
+### Task 4: Add DiSSCo Panel to Frontend Template
 
-**File**: `src/templates/record.jinja2`
+**File**: `src/templates/record.jinja2` (**MODIFY EXISTING FILE**)
 
-**Update the JavaScript** to use Museum ID (`museumid`) as the primary identifier for DiSSCover lookup:
+**Action**: Add a DiSSCo integration panel to the specimen record page. This requires:
+1. Adding JavaScript code to make AJAX calls to the DiSSCo API
+2. Adding HTML elements to display the DiSSCo results
+
+**Add the following JavaScript** inside the `$(document).ready()` block (or create one if it doesn't exist):
 
 ```javascript
 // DiSSCo Integration - Specimen Provenance Lookup (Scenario 1)
@@ -700,35 +711,30 @@ if (museumId && museumId.trim()) {
 
 ---
 
-### Task 5: Remove Deprecated Convenience Endpoint
+### Task 5: Register DiSSCo Routes in Main Application
 
-**File**: `src/services/dissco.py`
+**File**: `src/main.py` (**MODIFY EXISTING FILE**)
 
-Since we're focusing on Museum ID as the primary identifier, we should remove or simplify the convenience endpoint. The main `/specimen/{museum_id}` endpoint is sufficient.
+**Action**: Import the new DiSSCo service and register its routes with the FastAPI application.
 
-If backward compatibility is needed, you can add an alias:
+**Add import** at the top of the file with other service imports:
 
 ```python
-@route.get(
-    "/lookup/museumid/{museum_id}",
-    response_model=DiSSCoSpecimenResponse,
-    response_description="DiSSCo Lookup by Museum ID (alias)",
+from services import (
+    # ... existing imports ...
+    dissco,
 )
-async def lookup_by_museum_id_alias(
-    museum_id: str = Path(
-        ...,
-        title="Museum ID",
-        description="Physical specimen identifier (BCDM museumid field)",
-    ),
-):
-    """
-    Alias endpoint for museum ID lookup.
-    
-    This redirects to the main /specimen/{museum_id} endpoint.
-    Use /specimen/{museum_id} directly for new implementations.
-    """
-    return await lookup_specimen_in_dissco(museum_id)
 ```
+
+**Add route registration** in the API router section:
+
+```python
+api_router = APIRouter(prefix="/api")
+# ... existing route registrations ...
+api_router.include_router(dissco.route)
+```
+
+This registers the DiSSCo API endpoints under the `/api/dissco` prefix.
 
 ---
 
@@ -871,23 +877,24 @@ Example: `https://dev.dissco.tech/search?q=AAA1234-21`
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/settings.py` | Modify | Update `dissco_api_url` default to `https://dev.dissco.tech/api` |
-| `src/services/dissco.py` | Modify | Replace mock with real API client using `$filter.physicalSpecimenId` |
-| `src/templates/record.jinja2` | Modify | Update JS to use `museumid` for lookup |
+| `src/settings.py` | **Modify** | Add DiSSCo settings (`dissco_api_url`, `dissco_enabled`, etc.) |
+| `src/services/dissco.py` | **Create** | New service module with DiSSCover API client |
+| `src/templates/record.jinja2` | **Modify** | Add DiSSCo integration panel with JavaScript |
+| `src/main.py` | **Modify** | Register DiSSCo API routes |
 
-### API Endpoint Changes
+### New API Endpoint
 
-| Before | After |
-|--------|-------|
-| `GET /api/dissco/specimen/{identifier}?identifier_type=...` | `GET /api/dissco/specimen/{museum_id}` |
+```
+GET /api/dissco/specimen/{museum_id}
+```
 
-The new endpoint is simpler and focuses on the Museum ID as the sole identifier type.
+This endpoint accepts a Museum ID (BCDM `museumid` field) and queries DiSSCover using `$filter.physicalSpecimenId`.
 
 ### Dependencies
 
-No new dependencies required. Uses existing:
-- `httpx` (already used in BOLD)
-- `ujson` (already used in BOLD)
+No new dependencies required. Uses existing BOLD infrastructure:
+- `httpx` (already used in BOLD for HTTP requests)
+- `ujson` (already used in BOLD for JSON serialization)
 - Redis caching via `util.py` (already used in BOLD)
 
 ---
