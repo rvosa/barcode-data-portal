@@ -28,6 +28,7 @@ from services import (
     qr,
     terms,
     develop,
+    dissco,
 )
 from views import (
     index,
@@ -44,6 +45,7 @@ from views import (
     sequence,
     templates,
     theme,
+    dissco as dissco_views,
 )
 
 app = FastAPI(docs_url="/api/docs", redoc_url="/api/redoc", title="BOLD Portal")
@@ -72,6 +74,7 @@ api_router.include_router(taxonomy.route)
 api_router.include_router(qr.route)
 api_router.include_router(test.route)
 api_router.include_router(develop.route)
+api_router.include_router(dissco.route)
 
 app.include_router(api_router)
 
@@ -90,6 +93,7 @@ app.include_router(api.route)
 app.include_router(about.route)
 app.include_router(sequence.route)
 app.include_router(theme.route)
+app.include_router(dissco_views.route)
 
 
 # Middleware #

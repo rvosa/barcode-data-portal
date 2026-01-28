@@ -755,6 +755,66 @@
 
         populate_taxon_treemap()
         populate_records_table()
+
+        // DiSSCo Integration - Institution Sync Status (Scenario 3)
+        $.ajax({
+            url: '/api/dissco/sync/status/{{ code|e if code else name|e }}',
+            method: 'GET',
+            success: function(response) {
+                $('#dissco-sync-loading').hide();
+                $('#dissco-sync-content').show();
+                
+                // Update sync summary
+                $('#dissco-total-bold').text(response.sync_summary.total_bold_records.toLocaleString());
+                $('#dissco-matched').text(response.sync_summary.matched_in_dissco.toLocaleString());
+                $('#dissco-pending').text(response.sync_summary.pending_match.toLocaleString());
+                $('#dissco-not-in').text(response.sync_summary.not_in_dissco.toLocaleString());
+                
+                if (response.sync_summary.last_sync_time) {
+                    let lastSync = new Date(response.sync_summary.last_sync_time);
+                    $('#dissco-last-sync').text(lastSync.toLocaleString());
+                }
+                
+                // Calculate and display match percentage
+                let matchPercent = response.sync_summary.total_bold_records > 0 
+                    ? ((response.sync_summary.matched_in_dissco / response.sync_summary.total_bold_records) * 100).toFixed(1)
+                    : 0;
+                $('#dissco-match-percent').text(matchPercent + '%');
+                
+                // Update discrepancies
+                let totalDiscrepancies = response.discrepancies.taxonomy_mismatch + 
+                    response.discrepancies.location_mismatch + 
+                    response.discrepancies.date_mismatch;
+                    
+                if (totalDiscrepancies > 0) {
+                    $('#dissco-discrepancies').html(
+                        '<span class="text-warning">' + totalDiscrepancies + ' records with discrepancies</span>' +
+                        '<ul class="small">' +
+                        '<li>Taxonomy: ' + response.discrepancies.taxonomy_mismatch + '</li>' +
+                        '<li>Location: ' + response.discrepancies.location_mismatch + '</li>' +
+                        '<li>Dates: ' + response.discrepancies.date_mismatch + '</li>' +
+                        '</ul>'
+                    );
+                } else {
+                    $('#dissco-discrepancies').html('<span class="text-success">No discrepancies found</span>');
+                }
+                
+                // Update recent events
+                if (response.recent_events && response.recent_events.length > 0) {
+                    let eventsHtml = '<ul class="list-unstyled small">';
+                    response.recent_events.forEach(function(event) {
+                        let eventDate = new Date(event.timestamp);
+                        eventsHtml += '<li><strong>' + eventDate.toLocaleDateString() + '</strong>: ' + event.description + '</li>';
+                    });
+                    eventsHtml += '</ul>';
+                    $('#dissco-events').html(eventsHtml);
+                }
+            },
+            error: function(xhr) {
+                $('#dissco-sync-loading').hide();
+                $('#dissco-sync-error').show();
+            }
+        });
     }); //end Document Ready
 </script>
 
@@ -941,6 +1001,84 @@
         <div class="col-lg-12">
             {% set coordinates_map_title_center = True %}
             {% include "includes/coordinates_map.jinja2" %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line-center"></div>
+                    <h1 class="text-center"><i class="fa fa-globe"></i> DiSSCo Integration Status</h1>
+                    <div id="dissco-sync-loading" class="text-center">
+                        <div class="sk-spinner sk-spinner-wave">
+                            <div class="sk-rect1"></div>
+                            <div class="sk-rect2"></div>
+                            <div class="sk-rect3"></div>
+                            <div class="sk-rect4"></div>
+                            <div class="sk-rect5"></div>
+                        </div>
+                        <p class="text-muted">Loading DiSSCo synchronization status...</p>
+                    </div>
+                    <div id="dissco-sync-error" style="display: none;">
+                        <div class="alert alert-warning text-center">
+                            <i class="fa fa-exclamation-triangle"></i> Unable to load DiSSCo sync status. The DiSSCo integration may be temporarily unavailable.
+                        </div>
+                    </div>
+                    <div id="dissco-sync-content" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <div class="stats-widget">
+                                    <h2 id="dissco-total-bold" class="font-bold">-</h2>
+                                    <span>Total BOLD Records</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="stats-widget">
+                                    <h2 id="dissco-matched" class="font-bold" style="color: #1ab394;">-</h2>
+                                    <span>Matched in DiSSCo</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="stats-widget">
+                                    <h2 id="dissco-pending" class="font-bold" style="color: #f8ac59;">-</h2>
+                                    <span>Pending Match</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="stats-widget">
+                                    <h2 id="dissco-not-in" class="font-bold" style="color: #6c757d;">-</h2>
+                                    <span>Not in DiSSCo</span>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h4>Coverage</h4>
+                                <p><strong>Match Rate:</strong> <span id="dissco-match-percent">-</span></p>
+                                <p><strong>Last Sync:</strong> <span id="dissco-last-sync">-</span></p>
+                            </div>
+                            <div class="col-md-4">
+                                <h4>Data Discrepancies</h4>
+                                <div id="dissco-discrepancies">-</div>
+                            </div>
+                            <div class="col-md-4">
+                                <h4>Recent Events</h4>
+                                <div id="dissco-events">-</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-12 text-center">
+                                <p class="text-muted small">
+                                    <a href="https://www.dissco.eu/" target="_blank">DiSSCo</a> (Distributed System of Scientific Collections) 
+                                    provides unified digital access to European natural science collections.
+                                    <br><a href="/dissco/tracking" class="navy-link">Track samples in DiSSCo <i class="fa fa-arrow-right"></i></a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="row">
