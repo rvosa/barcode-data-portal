@@ -10,6 +10,15 @@ This document provides a complete technical specification for implementing DiSSC
 ### What This Integration Does
 When a user views a specimen record in BOLD (e.g., `/record/AAA1234-21`), the system queries DiSSCover to check if a corresponding Digital Specimen exists. If found, BOLD displays a panel showing the DiSSCover DOI, specimen metadata, and direct links to the DiSSCover interface.
 
+### Primary Lookup Strategy: Museum ID via `$filter.physicalSpecimenId`
+
+The **recommended and most reliable** approach for linking BOLD records to DiSSCover specimens is to use the `museumid` field from BCDM (Barcode Core Data Model) with DiSSCover's `$filter.physicalSpecimenId` parameter. This provides an exact match on the physical specimen identifier that both systems share.
+
+**Why Museum ID is the best identifier:**
+- The `museumid` in BCDM corresponds directly to the physical specimen's catalog number at the holding institution
+- DiSSCover indexes specimens by their `physicalSpecimenId` (e.g., `RMNH.INS.12345`)
+- This is the most stable identifier as it refers to the actual physical object, not derived data like Process IDs
+
 ### Architecture: Backend Proxy Pattern
 
 ```
@@ -38,6 +47,16 @@ When a user views a specimen record in BOLD (e.g., `/record/AAA1234-21`), the sy
 - **Caching**: Redis (existing infrastructure in BOLD)
 - **HTTP Client**: `httpx` (async) for internal calls; should use `httpx` for external DiSSCover calls
 - **Configuration**: Pydantic Settings via `src/settings.py`
+
+### BCDM Field: `museumid`
+In the Barcode Core Data Model (BCDM), the `museumid` field stores the catalog number or specimen identifier assigned by the holding institution. This is the physical specimen ID that DiSSCover uses as its primary identifier.
+
+**Location in BOLD records**: `records[0].museumid`
+
+**Example values**:
+- `RMNH.INS.12345` (Naturalis)
+- `ZMB.ARA.67890` (Museum für Naturkunde Berlin)
+- `NHMUK.ENT.12345` (Natural History Museum London)
 
 ### Relevant Existing Files
 | File | Purpose |
@@ -80,30 +99,42 @@ dissco_enabled: bool = True  # Feature flag - OK
 GET /digital-specimen/v1/search
 ```
 
-**Full URL Example**:
+### Primary Search Method: `$filter.physicalSpecimenId`
+
+**Full URL Example** (using Museum ID):
 ```
-https://dev.dissco.tech/api/digital-specimen/v1/search?q=BOLD:AAA1234-21&pageSize=10
+https://dev.dissco.tech/api/digital-specimen/v1/search?$filter.physicalSpecimenId=RMNH.INS.12345&pageSize=10
 ```
+
+This is the **recommended approach** for BOLD-DiSSCover integration because:
+1. It performs an exact match on the physical specimen identifier
+2. It directly maps BCDM's `museumid` to DiSSCover's `physicalSpecimenId`
+3. It avoids ambiguity from free-text searches
 
 ### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `q` | string | No | Free-text search query |
-| `$filter.physicalSpecimenId` | string | No | Exact match on physical specimen ID |
+| `$filter.physicalSpecimenId` | string | **PRIMARY** | Exact match on physical specimen ID (use BCDM `museumid`) |
+| `q` | string | Fallback | Free-text search query (for cases where museumid is unavailable) |
 | `$filter.collectionCode` | string | No | Collection code filter |
 | `$filter.species` | string | No | Scientific name filter |
 | `pageSize` | integer | No | Results per page (default 25, max 100) |
 | `pageNumber` | integer | No | Page number (1-indexed) |
 
-### Search Strategy for BOLD Identifiers
+### Search Strategy (Priority Order)
 
-BOLD can query DiSSCover using multiple identifier types. Try these in order:
+When looking up a BOLD specimen in DiSSCover, use the following priority:
 
-1. **BOLD Process ID with prefix**: `q=BOLD:{processid}` (e.g., `q=BOLD:AAA1234-21`)
-2. **BOLD Process ID raw**: `q={processid}` (e.g., `q=AAA1234-21`)
-3. **Sample ID**: `q={sampleid}`
-4. **Museum ID / Catalog Number**: `$filter.physicalSpecimenId={museumid}`
+1. **Museum ID (PRIMARY)**: `$filter.physicalSpecimenId={museumid}` 
+   - This is the most reliable link as it matches the physical specimen's catalog number
+   - Example: `$filter.physicalSpecimenId=RMNH.INS.12345`
+
+2. **Fallback - Free-text search on Museum ID**: `q={museumid}`
+   - Use if the exact filter doesn't return results (in case of formatting differences)
+   - Example: `q=RMNH.INS.12345`
+
+Note: Process IDs and Sample IDs are BOLD-specific and may not be indexed in DiSSCover. The Museum ID provides the strongest cross-reference to the physical specimen in European collections.
 
 ### API Response Format
 
@@ -214,9 +245,10 @@ dissco_api_url: str = "https://dev.dissco.tech/api"
 **Replace the mock `_mock_dissco_specimen_lookup` function** with a real implementation that:
 
 1. Makes HTTP requests to DiSSCover API using `httpx`
-2. Implements the search strategy (try multiple identifier formats)
-3. Uses Redis caching for responses
-4. Handles errors gracefully
+2. Uses `$filter.physicalSpecimenId` with the BCDM `museumid` as the **primary** search strategy
+3. Falls back to free-text search if exact filter fails
+4. Uses Redis caching for responses
+5. Handles errors gracefully
 
 **Implementation**:
 
@@ -332,24 +364,33 @@ def _parse_disscover_response(api_response: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def lookup_specimen_in_disscover(
-    identifier: str,
-    identifier_type: str = "processid"
+    museum_id: str
 ) -> Dict[str, Any]:
     """
-    Look up a specimen in DiSSCover using multiple search strategies.
+    Look up a specimen in DiSSCover using the Museum ID (physicalSpecimenId).
+    
+    This is the PRIMARY search method for BOLD-DiSSCover integration.
+    The museumid from BCDM maps directly to DiSSCover's physicalSpecimenId field.
     
     Args:
-        identifier: The specimen identifier (process ID, sample ID, or museum ID)
-        identifier_type: Type of identifier ('processid', 'sampleid', 'museumid')
+        museum_id: The Museum ID / catalog number from BCDM (records[0].museumid)
         
     Returns:
         Dict with lookup results
     """
+    if not museum_id or not museum_id.strip():
+        return {
+            "found": False,
+            "message": "No Museum ID available for this specimen. DiSSCover lookup requires a physical specimen identifier."
+        }
+    
+    museum_id = museum_id.strip()
+    
     dissco_settings = _get_dissco_settings()
     cache_ttl = dissco_settings["cache_ttl"]
     
     # Check cache first
-    cache_key = _generate_cache_key(identifier, identifier_type)
+    cache_key = _generate_cache_key(museum_id, "museumid")
     cached_result = util.get_cache_from_meta_ids([cache_key])
     if cached_result and cached_result[0]:
         try:
@@ -357,29 +398,16 @@ async def lookup_specimen_in_disscover(
         except:
             pass
     
-    # Build search strategies based on identifier type
-    search_strategies = []
+    # Search Strategy:
+    # 1. PRIMARY: Exact match using $filter.physicalSpecimenId
+    # 2. FALLBACK: Free-text search in case of formatting differences
     
-    if identifier_type == "processid":
-        # Try with BOLD: prefix first, then raw
-        search_strategies = [
-            {"q": f"BOLD:{identifier}", "pageSize": "5"},
-            {"q": identifier, "pageSize": "5"},
-        ]
-    elif identifier_type == "sampleid":
-        search_strategies = [
-            {"q": identifier, "pageSize": "5"},
-        ]
-    elif identifier_type == "museumid":
-        # Use structured filter for museum IDs
-        search_strategies = [
-            {"$filter.physicalSpecimenId": identifier, "pageSize": "5"},
-            {"q": identifier, "pageSize": "5"},
-        ]
-    else:
-        search_strategies = [
-            {"q": identifier, "pageSize": "5"},
-        ]
+    search_strategies = [
+        # Primary: Exact filter match on physicalSpecimenId
+        {"$filter.physicalSpecimenId": museum_id, "pageSize": "10"},
+        # Fallback: Free-text search
+        {"q": museum_id, "pageSize": "10"},
+    ]
     
     # Try each strategy until we get results
     for params in search_strategies:
@@ -399,7 +427,7 @@ async def lookup_specimen_in_disscover(
     # No results from any strategy
     result = {
         "found": False,
-        "message": "Specimen not found in DiSSCo network. The physical specimen may not yet be digitized or registered in a participating European collection."
+        "message": f"Specimen with Museum ID '{museum_id}' not found in DiSSCo network. The physical specimen may not yet be digitized or registered in a participating European collection."
     }
     
     # Cache negative results with shorter TTL (10 minutes)
@@ -411,28 +439,38 @@ async def lookup_specimen_in_disscover(
     return result
 ```
 
-**Update the API endpoint** to use the new async function:
+**Update the API endpoint** to use Museum ID as the primary identifier:
 
 ```python
 @route.get(
-    "/specimen/{identifier}",
+    "/specimen/{museum_id}",
     response_model=DiSSCoSpecimenResponse,
     response_description="DiSSCo Specimen Lookup Result",
 )
 async def lookup_specimen_in_dissco(
-    identifier: str = Path(
+    museum_id: str = Path(
         ...,
-        title="Specimen Identifier",
-        description="Sample ID, Process ID, or Museum ID to search for",
-    ),
-    identifier_type: str = Query(
-        default="processid",
-        title="Identifier Type",
-        description="Type of identifier being provided",
-        pattern="(sampleid|processid|museumid)",
+        title="Museum ID",
+        description="Physical specimen identifier (BCDM museumid field, e.g., RMNH.INS.12345)",
     ),
 ):
-    """Look up a single specimen in the DiSSCo network."""
+    """
+    Look up a single specimen in the DiSSCo network by Museum ID.
+    
+    **Primary Lookup Method**
+    
+    This endpoint searches DiSSCover using the `$filter.physicalSpecimenId` parameter,
+    which maps directly to the BCDM `museumid` field. This provides the most reliable
+    link between BOLD records and DiSSCover Digital Specimens.
+    
+    **Parameters:**
+    - **museum_id**: The Museum ID / catalog number from the BCDM (e.g., RMNH.INS.12345)
+    
+    **Example Request:**
+    ```
+    GET /api/dissco/specimen/RMNH.INS.12345
+    ```
+    """
     dissco_settings = _get_dissco_settings()
 
     if not dissco_settings["enabled"]:
@@ -441,8 +479,8 @@ async def lookup_specimen_in_dissco(
             detail="DiSSCo integration is currently disabled",
         )
 
-    # Perform real lookup
-    result = await lookup_specimen_in_disscover(identifier, identifier_type)
+    # Perform lookup using Museum ID (physicalSpecimenId)
+    result = await lookup_specimen_in_disscover(museum_id)
 
     return DiSSCoSpecimenResponse(**result)
 ```
@@ -495,24 +533,19 @@ class DiSSCoSpecimenResponse(BaseModel):
 
 **File**: `src/templates/record.jinja2`
 
-**Update the JavaScript** to handle new response fields and improve display:
+**Update the JavaScript** to use Museum ID (`museumid`) as the primary identifier for DiSSCover lookup:
 
 ```javascript
 // DiSSCo Integration - Specimen Provenance Lookup (Scenario 1)
-// Try processid first (most reliable for BOLD records)
-let processId = "{{ processid|e }}";
-let sampleId = "{{ records[0].sampleid|e if records[0].sampleid else '' }}";
+// Use museumid as the PRIMARY identifier for DiSSCover lookup
+// This maps directly to DiSSCover's $filter.physicalSpecimenId
+
 let museumId = "{{ records[0].museumid|e if records[0].museumid else '' }}";
 
-// Determine best identifier to use
-let lookupId = processId || sampleId;
-let lookupType = processId ? 'processid' : 'sampleid';
-
-if (lookupId) {
+if (museumId && museumId.trim()) {
     $.ajax({
-        url: '/api/dissco/specimen/' + encodeURIComponent(lookupId),
+        url: '/api/dissco/specimen/' + encodeURIComponent(museumId.trim()),
         method: 'GET',
-        data: { identifier_type: lookupType },
         success: function(response) {
             $('#dissco-status').hide();
             $('#dissco-result').show();
@@ -537,7 +570,7 @@ if (lookupId) {
                     $('#dissco-institution').text(instText);
                 }
                 
-                // Physical Specimen ID
+                // Physical Specimen ID (should match our museumid)
                 if (response.physical_specimen_id) {
                     $('#dissco-specimen-row').show();
                     $('#dissco-specimen-id').text(response.physical_specimen_id);
@@ -577,9 +610,9 @@ if (lookupId) {
                 if (response.message) {
                     $('#dissco-found-status').append('<br><small class="text-muted">' + response.message + '</small>');
                 }
-                // Show manual search link
+                // Show manual search link using museumid
                 $('#dissco-manual-search').show();
-                $('#dissco-manual-search-link').attr('href', 'https://dev.dissco.tech/search?q=' + encodeURIComponent(lookupId));
+                $('#dissco-manual-search-link').attr('href', 'https://dev.dissco.tech/search?q=' + encodeURIComponent(museumId));
             }
         },
         error: function(xhr) {
@@ -587,13 +620,15 @@ if (lookupId) {
             $('#dissco-result').show();
             $('#dissco-found-status').html('<span class="badge badge-warning"><i class="fa fa-exclamation-triangle"></i> Unable to check DiSSCo</span>');
             $('#dissco-manual-search').show();
-            $('#dissco-manual-search-link').attr('href', 'https://dev.dissco.tech/search?q=' + encodeURIComponent(lookupId));
+            $('#dissco-manual-search-link').attr('href', 'https://dev.dissco.tech/search?q=' + encodeURIComponent(museumId));
         }
     });
 } else {
+    // No Museum ID available - cannot perform lookup
     $('#dissco-status').hide();
     $('#dissco-result').show();
-    $('#dissco-found-status').html('<span class="badge badge-secondary">No identifier available for lookup</span>');
+    $('#dissco-found-status').html('<span class="badge badge-secondary">No Museum ID available for DiSSCover lookup</span>');
+    $('#dissco-found-status').append('<br><small class="text-muted">A physical specimen identifier (Museum ID) is required to search DiSSCover.</small>');
 }
 ```
 
@@ -665,45 +700,34 @@ if (lookupId) {
 
 ---
 
-### Task 5: Add Convenience Endpoint for Process ID Lookup
+### Task 5: Remove Deprecated Convenience Endpoint
 
 **File**: `src/services/dissco.py`
 
-Add a convenience endpoint that tries multiple search strategies automatically:
+Since we're focusing on Museum ID as the primary identifier, we should remove or simplify the convenience endpoint. The main `/specimen/{museum_id}` endpoint is sufficient.
+
+If backward compatibility is needed, you can add an alias:
 
 ```python
 @route.get(
-    "/lookup/{process_id}",
+    "/lookup/museumid/{museum_id}",
     response_model=DiSSCoSpecimenResponse,
-    response_description="DiSSCo Lookup by BOLD Process ID",
+    response_description="DiSSCo Lookup by Museum ID (alias)",
 )
-async def lookup_by_process_id(
-    process_id: str = Path(
+async def lookup_by_museum_id_alias(
+    museum_id: str = Path(
         ...,
-        title="BOLD Process ID",
-        description="BOLD Process ID (e.g., AAA1234-21)",
+        title="Museum ID",
+        description="Physical specimen identifier (BCDM museumid field)",
     ),
 ):
     """
-    Convenience endpoint to look up a specimen by BOLD Process ID.
+    Alias endpoint for museum ID lookup.
     
-    This endpoint automatically tries multiple search strategies:
-    1. Search with BOLD: prefix
-    2. Search with raw process ID
-    
-    Use this endpoint when you have a BOLD Process ID and want the
-    system to automatically find the best match.
+    This redirects to the main /specimen/{museum_id} endpoint.
+    Use /specimen/{museum_id} directly for new implementations.
     """
-    dissco_settings = _get_dissco_settings()
-
-    if not dissco_settings["enabled"]:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="DiSSCo integration is currently disabled",
-        )
-
-    result = await lookup_specimen_in_disscover(process_id, "processid")
-    return DiSSCoSpecimenResponse(**result)
+    return await lookup_specimen_in_dissco(museum_id)
 ```
 
 ---
@@ -714,6 +738,7 @@ async def lookup_by_process_id(
 
 | Error | Cause | BOLD Action |
 |-------|-------|-------------|
+| No Museum ID | Record doesn't have museumid | Show "No Museum ID available for lookup" |
 | Network timeout | DiSSCover slow/unreachable | Show "DiSSCover temporarily unavailable", offer manual search |
 | HTTP 4xx | Invalid request | Log error, return not found with message |
 | HTTP 5xx | DiSSCover server error | Log error, show "Service unavailable" |
@@ -723,8 +748,8 @@ async def lookup_by_process_id(
 
 Add appropriate logging calls:
 ```python
-logger.info(f"DiSSCover lookup: {identifier_type}:{identifier}")
-logger.warning(f"DiSSCover timeout for {identifier}")
+logger.info(f"DiSSCover lookup for museumid: {museum_id}")
+logger.warning(f"DiSSCover timeout for museumid: {museum_id}")
 logger.error(f"DiSSCover API error: {error}")
 ```
 
@@ -739,21 +764,32 @@ logger.error(f"DiSSCover API error: {error}")
 - [ ] `_parse_disscover_response` handles empty response
 - [ ] Cache key generation is consistent
 - [ ] Caching stores and retrieves correctly
+- [ ] Empty/null museum ID returns appropriate message
 
 ### Integration Tests
 - [ ] Full lookup flow with real DiSSCover dev API
-- [ ] Process ID with BOLD: prefix finds specimen
-- [ ] Raw process ID finds specimen
-- [ ] Sample ID lookup works
-- [ ] Museum ID lookup works
-- [ ] Non-existent specimen returns not found
+- [ ] Museum ID exact filter match (`$filter.physicalSpecimenId`) finds specimen
+- [ ] Fallback free-text search works when filter fails
+- [ ] Non-existent museum ID returns not found
+- [ ] Specimen without Museum ID shows appropriate message
 
 ### Frontend Tests
 - [ ] Panel shows loading state initially
 - [ ] Found specimen displays all fields
 - [ ] Not found shows message and manual search link
+- [ ] No Museum ID shows appropriate message (not error)
 - [ ] API error shows warning and manual search link
 - [ ] Links to DiSSCover work correctly
+
+### Example Test Cases
+
+| Museum ID | Expected Result |
+|-----------|-----------------|
+| `RMNH.INS.12345` | Found (if exists in DiSSCover) |
+| `ZMB.ARA.67890` | Found (if exists in DiSSCover) |
+| `NONEXISTENT.123` | Not found with appropriate message |
+| `""` (empty) | "No Museum ID available" message |
+| `null` | "No Museum ID available" message |
 
 ---
 
@@ -805,13 +841,47 @@ Example: `https://dev.dissco.tech/search?q=AAA1234-21`
 
 ---
 
-## 9. Summary of Changes
+## 9. BCDM to DiSSCover Field Mapping
+
+### Primary Mapping
+
+| BCDM Field | DiSSCover Parameter | DiSSCover Response Field |
+|------------|---------------------|--------------------------|
+| `museumid` | `$filter.physicalSpecimenId` | `ods:physicalSpecimenID` |
+
+### Field Mapping Table
+
+| BCDM Field | Type | DiSSCover Equivalent | Notes |
+|------------|------|---------------------|-------|
+| `museumid` | string | `ods:physicalSpecimenID` | **PRIMARY KEY** - catalog number / specimen ID |
+| `inst` | string | `ods:organisationCode` | Institution code |
+| `species` | string | `ods:specimenName` | May differ due to taxonomic updates |
+| `country/ocean` | string | - | Available via `dwc:country` in full response |
+
+### Why Museum ID is the Best Identifier
+
+1. **Stability**: Museum IDs are permanent identifiers assigned by institutions
+2. **Uniqueness**: Catalog numbers are unique within each institution
+3. **Cross-system compatibility**: Both BOLD and DiSSCover use the same physical specimen ID
+4. **No transformation needed**: The `museumid` value can be used directly in the DiSSCover filter
+
+---
+
+## 10. Summary of Changes
 
 | File | Action | Description |
 |------|--------|-------------|
 | `src/settings.py` | Modify | Update `dissco_api_url` default to `https://dev.dissco.tech/api` |
-| `src/services/dissco.py` | Modify | Replace mock with real API client, add caching, update response model |
-| `src/templates/record.jinja2` | Modify | Update JS and HTML for enhanced display |
+| `src/services/dissco.py` | Modify | Replace mock with real API client using `$filter.physicalSpecimenId` |
+| `src/templates/record.jinja2` | Modify | Update JS to use `museumid` for lookup |
+
+### API Endpoint Changes
+
+| Before | After |
+|--------|-------|
+| `GET /api/dissco/specimen/{identifier}?identifier_type=...` | `GET /api/dissco/specimen/{museum_id}` |
+
+The new endpoint is simpler and focuses on the Museum ID as the sole identifier type.
 
 ### Dependencies
 
@@ -822,11 +892,72 @@ No new dependencies required. Uses existing:
 
 ---
 
-## 10. Rollout Plan
+## 11. Rollout Plan
 
 1. **Development**: Implement against `https://dev.dissco.tech/api`
-2. **Testing**: Test with known BOLD specimens that exist in DiSSCover
+2. **Testing**: Test with known BOLD specimens that have Museum IDs registered in DiSSCover
 3. **Staging**: Deploy to staging environment, verify caching and error handling
 4. **Production**: Switch `dissco_api_url` to `https://dissco.tech/api`
 
 The feature flag `dissco_enabled` allows quick rollback if issues arise.
+
+---
+
+## 12. Example API Calls
+
+### Looking up a specimen by Museum ID
+
+**Request:**
+```
+GET https://dev.dissco.tech/api/digital-specimen/v1/search?$filter.physicalSpecimenId=RMNH.INS.12345&pageSize=10
+```
+
+**Expected Response (if found):**
+```json
+{
+  "data": [
+    {
+      "id": "20.5000.1025/ABC-123-XYZ",
+      "type": "digitalSpecimen",
+      "attributes": {
+        "@id": "https://doi.org/20.5000.1025/ABC-123-XYZ",
+        "ods:physicalSpecimenID": "RMNH.INS.12345",
+        "ods:specimenName": "Apis mellifera",
+        "ods:organisationName": "Naturalis Biodiversity Center",
+        "ods:organisationCode": "RMNH",
+        "ods:midsLevel": 2,
+        "ods:isKnownToContainMedia": true
+      }
+    }
+  ],
+  "meta": {
+    "totalRecords": 1
+  }
+}
+```
+
+### BOLD Internal API Call
+
+**Request:**
+```
+GET /api/dissco/specimen/RMNH.INS.12345
+```
+
+**Expected Response:**
+```json
+{
+  "found": true,
+  "dissco_id": "https://doi.org/20.5000.1025/ABC-123-XYZ",
+  "physical_specimen_id": "RMNH.INS.12345",
+  "institution": {
+    "name": "Naturalis Biodiversity Center",
+    "code": "RMNH",
+    "country": ""
+  },
+  "specimen_name": "Apis mellifera",
+  "mids_level": 2,
+  "has_media": true,
+  "specimen_url": "https://dev.dissco.tech/ds/20.5000.1025/ABC-123-XYZ",
+  "last_sync": "2025-01-15T10:30:00.000Z"
+}
+```
