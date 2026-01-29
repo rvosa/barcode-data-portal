@@ -1,0 +1,89 @@
+---
+
+- name: Prepare environment
+  ansible.builtin.include_tasks: prepare.yml
+
+- name: Check mandatory environment variables
+  ansible.builtin.fail:
+    msg: Missing environment variable
+  when: lookup('env', item)|length == 0
+  with_items:
+    - IMAGE_VERSION
+
+- name: Create Docker current image version file
+  ansible.builtin.copy:
+    content: |
+      {{ lookup('env', 'IMAGE_VERSION') }}
+    dest: /opt/compose_projects/{{ project }}/current_image_version.txt
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Copy docker-compose file
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../docker-compose-naturalis.yml'
+    dest: /opt/compose_projects/{{ project }}/docker-compose.yml
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Copy development file (basic auth and Couchbase web UI) as docker override
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../docker-compose-naturalis-dev.yml'
+    dest: /opt/compose_projects/{{ project }}/docker-compose.override.yml
+    mode: "0644"
+    owner: root
+    group: root
+  when: basic_auth != ""
+
+- name: Copy CouchBase sample data
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../db_data/'
+    dest: /data/sample_data
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create environment file
+  ansible.builtin.copy:
+    content: |
+      IMAGE_VERSION="{{ lookup('env', 'IMAGE_VERSION') }}"
+      AWS_ACCESS_KEY_ID={{ aws_access_key_id }}
+      AWS_SECRET_ACCESS_KEY={{ aws_secret_access_key | b64decode }}
+      FQDN={{ fqdn }}
+      COUCHBASE_DROP_CLUSTER_ON_START=false
+      APP_NAME="fastapi-app"
+      APP_PORT=8000
+      REDIS_HOST=redis
+      REDIS_PORT=6379
+      COUCHBASE_ENDPOINT="couchbase://couchbase"
+      COUCHBASE_USER={{ couchbase_user }}
+      COUCHBASE_PASSWORD={{ couchbase_password }}
+      FASTAPI_NR_WORKERS={{ fastapi_nr_workers | default(4) }}
+      BASIC_AUTH={{ basic_auth }}
+      IMPORT_REGISTRY_TOKEN={{ import_registry_token }}
+      IMPORT_DIR="/import"
+    dest: /opt/compose_projects/{{ project }}/.env
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: Log in to Docker registry
+  ansible.builtin.command:
+    cmd: "docker login --username {{ lookup('env', 'CI_REGISTRY_USER') }} --password {{ lookup('env', 'CI_REGISTRY_PASSWORD') }} {{ lookup('env', 'CI_REGISTRY') }}"
+  no_log: true
+  when: lookup('env', 'CI_REGISTRY_PASSWORD')|length != 0
+
+- name: Pull container images
+  ansible.builtin.command:
+    cmd: "docker compose --ansi never pull"
+    chdir: /opt/compose_projects/{{ project }}/
+  register: temp_compose_pull
+  changed_when: "'Downloading' in temp_compose_pull.stdout"
+
+- name: Start containers
+  ansible.builtin.command:
+    cmd: "docker compose --ansi never up --detach"
+    chdir: /opt/compose_projects/{{ project }}/
+  register: temp_compose_up
+  changed_when: "'Started' in temp_compose_up.stdout"

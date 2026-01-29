@@ -4,6 +4,15 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
+# The ETL requires jq to generate Couchbase import files and git to fetch registry files
+# hadolint ignore=DL3008
+RUN set -eux; \
+    apt-get update; \
+    apt-get upgrade -y; \
+    apt-get install --no-install-recommends -y git jq; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*;
+
 # Create required directories
 RUN mkdir -p /opt/modules && \
     mkdir -p /tmp/bold-public-portal/cache

@@ -28,6 +28,7 @@ from services import (
     qr,
     terms,
     develop,
+    dissco,
 )
 from views import (
     index,
@@ -72,6 +73,7 @@ api_router.include_router(taxonomy.route)
 api_router.include_router(qr.route)
 api_router.include_router(test.route)
 api_router.include_router(develop.route)
+api_router.include_router(dissco.route)
 
 app.include_router(api_router)
 

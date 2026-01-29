@@ -79,6 +79,100 @@
 
         $("#coordinates-legend").hide()
         populate_coordinates_map(10)
+
+        // DiSSCo Integration - Specimen Provenance Lookup (Scenario 1)
+        // Use museumid as the PRIMARY identifier for DiSSCover lookup
+        // This is the local suffix in DiSSCover's namespaced physicalSpecimenId
+        let museumId = "{{ records[0].museumid|e if records[0].museumid else '' }}";
+
+        if (museumId && museumId.trim()) {
+            $.ajax({
+                url: '/api/dissco/specimen/' + encodeURIComponent(museumId.trim()),
+                method: 'GET',
+                success: function(response) {
+                    $('#dissco-status').hide();
+                    $('#dissco-result').show();
+
+                    if (response.found) {
+                        $('#dissco-found-status').html('<span class="badge badge-success"><i class="fa fa-check"></i> Found in DiSSCo</span>');
+
+                        // DOI
+                        if (response.dissco_id) {
+                            $('#dissco-id-row').show();
+                            let doiDisplay = response.dissco_id.replace('https://doi.org/', '');
+                            $('#dissco-id').html('<a href="' + response.dissco_id + '" target="_blank" class="navy-link">' + doiDisplay + ' <i class="fa fa-external-link"></i></a>');
+                        }
+
+                        // Institution
+                        if (response.institution) {
+                            $('#dissco-institution-row').show();
+                            let instText = response.institution.name;
+                            if (response.institution.code) {
+                                instText += ' (' + response.institution.code + ')';
+                            }
+                            $('#dissco-institution').text(instText);
+                        }
+
+                        // Physical Specimen ID (should match our museumid)
+                        if (response.physical_specimen_id) {
+                            $('#dissco-specimen-row').show();
+                            $('#dissco-specimen-id').text(response.physical_specimen_id);
+                        }
+
+                        // Specimen Name
+                        if (response.specimen_name) {
+                            $('#dissco-name-row').show();
+                            $('#dissco-name').html('<em>' + response.specimen_name + '</em>');
+                        }
+
+                        // MIDS Level
+                        if (response.mids_level !== null && response.mids_level !== undefined) {
+                            $('#dissco-mids-row').show();
+                            let midsPercent = (response.mids_level / 3) * 100;
+                            $('#dissco-mids').html(
+                                '<div class="progress" style="height: 20px; margin-bottom: 0;">' +
+                                '<div class="progress-bar" role="progressbar" style="width: ' + midsPercent + '%" ' +
+                                'aria-valuenow="' + response.mids_level + '" aria-valuemin="0" aria-valuemax="3">' +
+                                'Level ' + response.mids_level + '/3</div></div>'
+                            );
+                        }
+
+                        // Media indicator
+                        if (response.has_media) {
+                            $('#dissco-media-row').show();
+                            $('#dissco-media').html('<i class="fa fa-camera"></i> Media available in DiSSCover');
+                        }
+
+                        // View button
+                        if (response.specimen_url) {
+                            $('#dissco-link-row').show();
+                            $('#dissco-link').attr('href', response.specimen_url);
+                        }
+                    } else {
+                        $('#dissco-found-status').html('<span class="badge badge-secondary"><i class="fa fa-info-circle"></i> Not found in DiSSCo network</span>');
+                        if (response.message) {
+                            $('#dissco-found-status').append('<br><small class="text-muted">' + response.message + '</small>');
+                        }
+                        // Show manual search link using museumid
+                        $('#dissco-manual-search').show();
+                        $('#dissco-manual-search-link').attr('href', 'https://disscover.dissco.eu/search?q=' + encodeURIComponent(museumId));
+                    }
+                },
+                error: function(xhr) {
+                    $('#dissco-status').hide();
+                    $('#dissco-result').show();
+                    $('#dissco-found-status').html('<span class="badge badge-warning"><i class="fa fa-exclamation-triangle"></i> Unable to check DiSSCo</span>');
+                    $('#dissco-manual-search').show();
+                    $('#dissco-manual-search-link').attr('href', 'https://dissco.tech/search?q=' + encodeURIComponent(museumId));
+                }
+            });
+        } else {
+            // No Museum ID available - cannot perform lookup
+            $('#dissco-status').hide();
+            $('#dissco-result').show();
+            $('#dissco-found-status').html('<span class="badge badge-secondary">No Museum ID available for DiSSCover lookup</span>');
+            $('#dissco-found-status').append('<br><small class="text-muted">A physical specimen identifier (Museum ID) is required to search DiSSCover.</small>');
+        }
     }); //end Document Ready
 </script>
 
@@ -360,6 +454,67 @@
                             </tr>
                         </table>
                     </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1><i class="fa fa-globe"></i> DiSSCo Digital Specimen</h1>
+                    <div id="dissco-status">
+                        <div class="sk-spinner sk-spinner-wave">
+                            <div class="sk-rect1"></div>
+                            <div class="sk-rect2"></div>
+                            <div class="sk-rect3"></div>
+                            <div class="sk-rect4"></div>
+                            <div class="sk-rect5"></div>
+                        </div>
+                        <p class="text-muted">Checking DiSSCover network...</p>
+                    </div>
+                    <div id="dissco-result" style="display: none;">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Status:</th>
+                                <td id="dissco-found-status"></td>
+                            </tr>
+                            <tr id="dissco-id-row" style="display: none;">
+                                <th>DOI:</th>
+                                <td id="dissco-id"></td>
+                            </tr>
+                            <tr id="dissco-institution-row" style="display: none;">
+                                <th>Holding Institution:</th>
+                                <td id="dissco-institution"></td>
+                            </tr>
+                            <tr id="dissco-specimen-row" style="display: none;">
+                                <th>Physical Specimen ID:</th>
+                                <td id="dissco-specimen-id"></td>
+                            </tr>
+                            <tr id="dissco-name-row" style="display: none;">
+                                <th>Specimen Name:</th>
+                                <td id="dissco-name"></td>
+                            </tr>
+                            <tr id="dissco-mids-row" style="display: none;">
+                                <th>Data Completeness:</th>
+                                <td id="dissco-mids"></td>
+                            </tr>
+                            <tr id="dissco-media-row" style="display: none;">
+                                <th>Media:</th>
+                                <td id="dissco-media"></td>
+                            </tr>
+                            <tr id="dissco-link-row" style="display: none;">
+                                <th>View in DiSSCover:</th>
+                                <td><a id="dissco-link" href="#" target="_blank" class="btn btn-sm btn-primary"><i class="fa fa-external-link"></i> Open in DiSSCover</a></td>
+                            </tr>
+                        </table>
+                        <div id="dissco-manual-search" style="display: none;" class="text-center">
+                            <a id="dissco-manual-search-link" href="#" target="_blank" class="btn btn-sm btn-default">
+                                <i class="fa fa-search"></i> Search DiSSCover manually
+                            </a>
+                        </div>
+                    </div>
+                    <p class="text-muted small">
+                        <a href="https://www.dissco.eu/" target="_blank">DiSSCo</a> (Distributed System of Scientific Collections)
+                        provides unified digital access to European natural science collections.
+                    </p>
                 </div>
             </div>
             <div class="ibox">
