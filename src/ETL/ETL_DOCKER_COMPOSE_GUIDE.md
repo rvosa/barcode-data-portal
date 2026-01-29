@@ -22,13 +22,42 @@ When deploying the BOLD Public Portal using Docker Compose, the ETL pipeline loa
 **Primary Data:**
 - `bold_singlepane_public_export.jsonl` - BCDM records
 
-**Registries:**
-- `bold_dataset_registry.jsonl`
-- `bold_barcodecluster_registry.jsonl`
-- `bold_geopol_registry.jsonl`
-- `bold_institution_registry.jsonl`
-- `bold_primer_registry.jsonl`
-- `bold_taxonomy_registry.jsonl`
+**Registries (typically stored compressed in a separate directory):**
+- `bold_dataset_registry.jsonl.gz`
+- `bold_barcodecluster_registry.jsonl.gz`
+- `bold_geopol_registry.jsonl.gz`
+- `bold_institution_registry.jsonl.gz`
+- `bold_primer_registry.jsonl.gz`
+- `bold_taxonomy_registry.jsonl.gz`
+
+### Recommended Directory Structure
+
+On the cluster node hosting the web app and Docker container, data files are organized under `/data`:
+
+```
+/data/
+├── import_registries/           # Compressed registry files (source data)
+│   ├── bold_barcodecluster_registry.jsonl.gz
+│   ├── bold_dataset_registry.jsonl.gz
+│   ├── bold_geopol_registry.jsonl.gz
+│   ├── bold_institution_registry.jsonl.gz
+│   ├── bold_primer_registry.jsonl.gz
+│   └── bold_taxonomy_registry.jsonl.gz
+│
+└── import/                      # Working directory with extracted and generated files
+    ├── bold_singlepane_public_export.jsonl      # Primary BCDM data
+    ├── bold_*_registry.jsonl                    # Extracted registries
+    ├── *_summaries.jsonl                        # Generated summaries
+    ├── accepted_terms_combined.jsonl            # Combined accepted terms
+    ├── accepted_terms_chunk_*.jsonl             # Chunked terms (for large datasets)
+    ├── filtered_*_summaries.jsonl               # Filtered summaries (size limit handling)
+    ├── reduced_*_summaries.jsonl                # Reduced summaries (for exceptions)
+    ├── country_*.json                           # Individual country exception files
+    ├── inst_*.json                              # Individual institution exception files
+    ├── dataset_*.json                           # Individual dataset exception files
+    ├── seq_run_site_*.json                      # Individual sequence run site exception files
+    └── *.log                                    # Import and processing logs
+```
 
 ## Docker Compose Configuration
 
@@ -61,24 +90,33 @@ export COUCHBASE_USER
 export COUCHBASE_PASSWORD
 export REDIS_HOST
 
-# Create a working directory for data files
-WORKING_DIR="/data/etl-pipeline"
-mkdir -p $WORKING_DIR
+# Data directories on the cluster node (inside /data)
+REGISTRY_DIR="/data/import_registries"    # Compressed source registries
+WORKING_DIR="/data/import"                 # Working directory for ETL
+
+# Verify directories exist
+ls $REGISTRY_DIR
+ls $WORKING_DIR
 ```
 
 ### Step 2: Download and Extract Data Files
 
-Copy or download your JSON-L files to the working directory:
+The registry files are stored compressed in `/data/import_registries`. Extract them to the working directory `/data/import`:
+
 ```bash
-# If files are compressed, extract them
-gunzip $WORKING_DIR/bold_singlepane_public_export.jsonl.gz
-gunzip $WORKING_DIR/bold_dataset_registry.jsonl.gz
-gunzip $WORKING_DIR/bold_barcodecluster_registry.jsonl.gz
-gunzip $WORKING_DIR/bold_geopol_registry.jsonl.gz
-gunzip $WORKING_DIR/bold_institution_registry.jsonl.gz
-gunzip $WORKING_DIR/bold_primer_registry.jsonl.gz
-gunzip $WORKING_DIR/bold_taxonomy_registry.jsonl.gz
+# Extract primary BCDM data to working directory (if stored compressed)
+# gunzip -c $WORKING_DIR/bold_singlepane_public_export.jsonl.gz > $WORKING_DIR/bold_singlepane_public_export.jsonl
+
+# Extract registries from import_registries to import directory
+gunzip -c $REGISTRY_DIR/bold_dataset_registry.jsonl.gz > $WORKING_DIR/bold_dataset_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_barcodecluster_registry.jsonl.gz > $WORKING_DIR/bold_barcodecluster_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_geopol_registry.jsonl.gz > $WORKING_DIR/bold_geopol_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_institution_registry.jsonl.gz > $WORKING_DIR/bold_institution_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_primer_registry.jsonl.gz > $WORKING_DIR/bold_primer_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_taxonomy_registry.jsonl.gz > $WORKING_DIR/bold_taxonomy_registry.jsonl
 ```
+
+**Note:** Using `gunzip -c` preserves the original compressed files in `/data/import_registries` for future reference.
 
 ### Step 3: Generate Derived Data (Summaries and Terms)
 
@@ -285,44 +323,44 @@ python src/ETL/couchbase-tools/run_query.py \
 
 ## Running ETL Inside Docker Containers
 
-If you need to run the ETL pipeline from within a Docker container:
+The ETL pipeline runs on the cluster node where `/data/import` and `/data/import_registries` are located.
 
 ### Method 1: Execute on the FastAPI Container
 
 ```bash
-# Copy data files to the container
-docker cp $WORKING_DIR/. fastapi-app-production:/data/
+# Copy data files to the container (if not using volume mounts)
+docker cp /data/import/. fastapi-app-production:/data/import/
 
 # Execute the bootstrap script inside the container
 docker exec -it fastapi-app-production bash -c "
     source /app/.env
-    bash /app/src/ETL/couchbase-tools/bootstrap_couchbase.sh /data
+    bash /app/src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
 "
 ```
 
 ### Method 2: Run a Dedicated ETL Container
 
-Create a one-off container for ETL operations:
+Create a one-off container for ETL operations, mounting the `/data` directory from the host:
 ```bash
 # For production deployment (uses backend-production network)
 docker run --rm \
     --network barcode-data-portal_backend-production \
-    -v $WORKING_DIR:/data \
+    -v /data:/data \
     -v $(pwd):/app \
     -w /app \
     --env-file .env \
     fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data
+    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
 
 # For development deployment (uses backend network)
 docker run --rm \
     --network barcode-data-portal_backend \
-    -v $WORKING_DIR:/data \
+    -v /data:/data \
     -v $(pwd):/app \
     -w /app \
     --env-file .env \
     fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data
+    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
 ```
 
 **Note:** The network name format is `<project-name>_<network-name>`. Replace `barcode-data-portal` with your actual project directory name if different.
