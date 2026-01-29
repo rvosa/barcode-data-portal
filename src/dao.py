@@ -63,6 +63,7 @@ NAME_MAP = {
     "dataset_summary": {"bucket": "DERIVED", "collection": "dataset_summaries"},
     "primer_summary": {"bucket": "DERIVED", "collection": "primer_summaries"},
     "taxonomy_summary": {"bucket": "DERIVED", "collection": "taxonomy_summaries"},
+    "specimen_ranks": {"bucket": "DERIVED", "collection": "specimen_ranks"},
     "terms": {"bucket": "DERIVED", "collection": "accepted_terms"},
     "ancillary": {"bucket": "ANCILLARY"},
 }

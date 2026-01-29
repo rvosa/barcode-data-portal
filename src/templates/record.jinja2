@@ -552,6 +552,52 @@
             <div class="ibox">
                 <div class="ibox-content">
                     <div class="navy-line"></div>
+                    <h1>Record Quality (BOLDetective)</h1>
+                    {% if ranking_data and ranking_data.rank is defined %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Quality Rank:</th>
+                                <td>{{ ranking_data.rank|e }}</td>
+                                <th>Score:</th>
+                                <td>{{ ranking_data.sumscore|e }} / {{ ranking_criteria_labels|length }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <p><strong>Criteria Evaluation:</strong></p>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Criterion</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for key, label in ranking_criteria_labels.items() %}
+                                <tr>
+                                    <td>{{ label|e }}</td>
+                                    <td>
+                                        {% if ranking_data.criteria and ranking_data.criteria[key] == 1 %}
+                                        <i class="fa fa-check text-success"></i>
+                                        {% else %}
+                                        <i class="fa fa-times text-danger"></i>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p><small><em>Quality ranks range from 1 (best) to 7 (needs improvement). Higher scores indicate more complete records.</em></small></p>
+                    {% else %}
+                    <p>Rankings have not yet been computed for this record.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
                     <h1>Collection</h1>
                     <div class="table-responsive">
                         <table class="table table-striped">
