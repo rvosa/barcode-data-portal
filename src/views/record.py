@@ -10,6 +10,26 @@ from util import get_app_url
 route = APIRouter(tags=["views"])
 
 
+# Criteria labels for BOLDetective ranking display
+RANKING_CRITERIA_LABELS = {
+    "species_level_id": "Species-level ID",
+    "bin_assigned": "BIN Assigned",
+    "sequence_quality": "Sequence Quality (≥500bp)",
+    "type_status": "Type Specimen",
+    "has_image": "Has Image",
+    "identifier_named": "Named Identifier",
+    "id_method_morphological": "Morphological ID Method",
+    "country_present": "Country/Ocean Present",
+    "coords_present": "Coordinates Present",
+    "collection_date_present": "Collection Date Present",
+    "collector_present": "Collector Present",
+    "locality_present": "Locality Present",
+    "institution_public": "Public Institution",
+    "museum_id_present": "Museum ID Present",
+    "voucher_status": "Voucher Status",
+}
+
+
 @route.get("/record/{processid}", response_class=HTMLResponse)
 async def show_record(
     request: Request,
@@ -75,6 +95,19 @@ async def show_record(
                 for document in datasets:
                     dataset_data[document["dataset.code"]] = document
 
+            # Fetch ranking data for this record
+            ranking_data = None
+            try:
+                resp = await client.get(
+                    url=f"{get_app_url()}/api/ranking/{processid}",
+                )
+                if resp.status_code == 200:
+                    ranking_data = resp.json()
+                    urls.append(resp.url)
+            except Exception:
+                # Ranking data is optional, so we silently ignore errors
+                pass
+
     except httpx.HTTPStatusError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -90,6 +123,8 @@ async def show_record(
             "records": records,
             "image_data": image_data,
             "dataset_data": dataset_data,
+            "ranking_data": ranking_data,
+            "ranking_criteria_labels": RANKING_CRITERIA_LABELS,
             "title": processid,
             "subtitle": f"Details of {processid}",
             "banner_bg_class": "mantis",
