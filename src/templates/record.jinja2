@@ -82,7 +82,7 @@
 
         // DiSSCo Integration - Specimen Provenance Lookup (Scenario 1)
         // Use museumid as the PRIMARY identifier for DiSSCover lookup
-        // This maps directly to DiSSCover's $filter.physicalSpecimenId
+        // This is the local suffix in DiSSCover's namespaced physicalSpecimenId
         let museumId = "{{ records[0].museumid|e if records[0].museumid else '' }}";
 
         if (museumId && museumId.trim()) {
