@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Path
+from pydantic import BaseModel
 from typing import Dict, Optional
+import logging
 
 import pathlib
 import sys
@@ -10,25 +12,49 @@ except ImportError:
     sys.path.append(pathlib.Path(__file__).parent.parent.resolve().as_posix())
     import dao
 
+logger = logging.getLogger(__name__)
 
 route = APIRouter(tags=["ranking"])
+
+
+class RankingCriteria(BaseModel):
+    """Individual BOLDetective criteria scores (1 = pass, 0 = fail)."""
+    species_level_id: int = 0
+    bin_assigned: int = 0
+    sequence_quality: int = 0
+    type_status: int = 0
+    has_image: int = 0
+    identifier_named: int = 0
+    id_method_morphological: int = 0
+    country_present: int = 0
+    coords_present: int = 0
+    collection_date_present: int = 0
+    collector_present: int = 0
+    locality_present: int = 0
+    institution_public: int = 0
+    museum_id_present: int = 0
+    voucher_status: int = 0
+
+
+class RankingResponse(BaseModel):
+    """BOLDetective ranking data for a specimen record."""
+    processid: str
+    rank: int
+    sumscore: int
+    criteria: RankingCriteria
 
 
 def get_cb_ranking_by_processid(processid: str) -> Optional[Dict]:
     """
     Retrieve ranking data for a specific processid from the specimen_ranks collection.
 
-    Uses processid as the document key (primary key) for direct lookup.
+    Uses a N1QL query to fetch the ranking document.
     """
     bucket = dao.NAME_MAP["specimen_ranks"]["bucket"]
     collection = dao.NAME_MAP["specimen_ranks"]["collection"]
 
     cluster = dao._get_cb_cluster()
-    cb_bucket = cluster.bucket(bucket)
-    cb_collection = cb_bucket.default_collection()
 
-    # Since processid is the primary key, we can do a direct key lookup
-    # However, the collection might use a different scope, so we query instead
     query = f"""
         SELECT `{collection}`.*
         FROM `{bucket}`.`_default`.`{collection}`
@@ -40,15 +66,15 @@ def get_cb_ranking_by_processid(processid: str) -> Optional[Dict]:
         rows = list(result.rows())
         if rows:
             return rows[0]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching ranking for processid {processid}: {e}")
 
     return None
 
 
 @route.get(
     "/ranking/{processid}",
-    response_model=Optional[Dict],
+    response_model=Optional[RankingResponse],
     response_description="Ranking data for a specimen record",
 )
 async def get_ranking(
@@ -59,7 +85,7 @@ async def get_ranking(
 
     Returns ranking information including:
     - **rank**: Quality rank (1-7, where 1 is best)
-    - **sumscore**: Sum of all criteria scores
+    - **sumscore**: Sum of all criteria scores (0-15)
     - **criteria**: Individual criterion pass/fail scores
 
     Returns null if ranking data is not available for the specified processid.

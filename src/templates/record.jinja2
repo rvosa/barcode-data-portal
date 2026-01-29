@@ -91,11 +91,7 @@
             })
             .then(ranking => {
                 if (ranking && ranking.rank !== undefined) {
-                    // Populate rank and sumscore
-                    $("#ranking-rank").text(ranking.rank)
-                    $("#ranking-sumscore").text(ranking.sumscore + " / 15")
-
-                    // Create criteria labels mapping
+                    // Create criteria labels mapping (15 BOLDetective criteria)
                     const criteriaLabels = {
                         "species_level_id": "Species-level ID",
                         "bin_assigned": "BIN Assigned",
@@ -114,10 +110,18 @@
                         "voucher_status": "Voucher Status"
                     }
 
-                    // Populate criteria table
+                    // Calculate max score from number of criteria
+                    const maxScore = Object.keys(criteriaLabels).length
+
+                    // Populate rank and sumscore
+                    $("#ranking-rank").text(ranking.rank)
+                    $("#ranking-sumscore").text(ranking.sumscore + " / " + maxScore)
+
+                    // Populate criteria table with null-safe access
                     let criteriaHtml = ""
+                    const criteria = ranking.criteria || {}
                     for (const [key, label] of Object.entries(criteriaLabels)) {
-                        const value = ranking.criteria[key]
+                        const value = criteria[key]
                         const icon = value === 1 ? '<i class="fa fa-check text-success"></i>' : '<i class="fa fa-times text-danger"></i>'
                         criteriaHtml += `<tr><td>${label}</td><td>${icon}</td></tr>`
                     }
