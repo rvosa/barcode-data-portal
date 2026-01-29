@@ -104,8 +104,8 @@ async def show_record(
                 if resp.status_code == 200:
                     ranking_data = resp.json()
                     urls.append(resp.url)
-            except Exception:
-                # Ranking data is optional, so we silently ignore errors
+            except (httpx.HTTPError, httpx.TimeoutException):
+                # Ranking data is optional, so we ignore network/timeout errors
                 pass
 
     except httpx.HTTPStatusError:
