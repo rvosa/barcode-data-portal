@@ -40,6 +40,8 @@ printf "\nLoad special summaries that use registries\n"
 python ETL/couchbase-tools/bulk_load_documents.py --verbosity $VERBOSITY --bucket DERIVED --collection taxonomy_summaries --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'taxid' --file $IMPORT_DIR/taxonomy_summaries.jsonl
 printf "\nLoad accepted terms\n"
 python ETL/couchbase-tools/bulk_load_documents.py --verbosity $VERBOSITY --bucket DERIVED --collection accepted_terms --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'term' --file $IMPORT_DIR/accepted_terms_combined.jsonl
+printf "\nLoad specimen ranks\n"
+python ETL/couchbase-tools/bulk_load_documents.py --verbosity $VERBOSITY --bucket DERIVED --collection specimen_ranks --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'processid' --file $IMPORT_DIR/specimen_ranks.jsonl
 printf "\n"
 
 printf "Step 4: Load ancillary documents\n"
