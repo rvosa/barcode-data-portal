@@ -5,3 +5,8 @@
 data/
 src/cypress/node_modules*
 src/cypress/package-lock.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
