@@ -109,6 +109,9 @@ while IFS= read -r primer; do
     jq -c ".aggregates = {}" $WORKING_DIR/$file_name >> $WORKING_DIR/filtered_primer_summaries.jsonl
 done < <(awk -v size_limit="$SIZE_LIMIT" '{ if (length($0) > size_limit) print }' $WORKING_DIR/primer_summaries.jsonl | jq -r '.name')
 
+# Step 2.7 Generate specimen rank summary
+python src/ETL/extract_rank_summary.py --output_file $WORKING_DIR/specimen_ranks.jsonl < $WORKING_DIR/bold_singlepane_public_export.jsonl
+
 # Step 3: Sanitize registry documents
 jq -c '. | select(.name != "")' $WORKING_DIR/bold_institution_registry.jsonl > $WORKING_DIR/bold_institution_registry_filtered.jsonl
 mv $WORKING_DIR/bold_institution_registry_filtered.jsonl $WORKING_DIR/bold_institution_registry.jsonl

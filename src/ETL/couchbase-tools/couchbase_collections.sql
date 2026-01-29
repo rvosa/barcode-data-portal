@@ -13,6 +13,7 @@ CREATE COLLECTION `DERIVED`.`_default`.`bin_summaries` IF NOT EXISTS;
 CREATE COLLECTION `DERIVED`.`_default`.`dataset_summaries` IF NOT EXISTS;
 CREATE COLLECTION `DERIVED`.`_default`.`primer_summaries` IF NOT EXISTS;
 CREATE COLLECTION `DERIVED`.`_default`.`taxonomy_summaries` IF NOT EXISTS;
+CREATE COLLECTION `DERIVED`.`_default`.`specimen_ranks` IF NOT EXISTS;
 
 -- BUCKET: ANCILLARY
 

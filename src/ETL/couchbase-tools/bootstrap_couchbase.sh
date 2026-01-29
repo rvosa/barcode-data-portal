@@ -31,6 +31,7 @@ python src/ETL/couchbase-tools/bulk_load_documents.py --bucket DERIVED --collect
 python src/ETL/couchbase-tools/bulk_load_documents.py --bucket DERIVED --collection primer_summaries --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'name' --file $WORKING_DIR/primer_summaries.jsonl
 python src/ETL/couchbase-tools/bulk_load_documents.py --bucket DERIVED --collection taxonomy_summaries --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'taxid' --file $WORKING_DIR/taxonomy_summaries.jsonl
 python src/ETL/couchbase-tools/bulk_load_documents.py --bucket DERIVED --collection accepted_terms --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'term' --file $WORKING_DIR/accepted_terms_combined.jsonl
+python src/ETL/couchbase-tools/bulk_load_documents.py --bucket DERIVED --collection specimen_ranks --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'processid' --file $WORKING_DIR/specimen_ranks.jsonl
 
 # Step 4: Load ancillary documents
 python src/ETL/couchbase-tools/bulk_load_documents.py --bucket ANCILLARY --collection datasets --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD --primary-key 'dataset.code' --file $WORKING_DIR/bold_dataset_registry.jsonl
