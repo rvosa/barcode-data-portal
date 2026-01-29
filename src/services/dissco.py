@@ -135,10 +135,11 @@ async def lookup_specimen_in_disscover(
     museum_id: str
 ) -> Dict[str, Any]:
     """
-    Look up a specimen in DiSSCover using the Museum ID (physicalSpecimenId).
+    Look up a specimen in DiSSCover using the Museum ID.
 
     This is the PRIMARY search method for BOLD-DiSSCover integration.
-    The museumid from BCDM maps directly to DiSSCover's physicalSpecimenId field.
+    Uses a free-text search with the 'q' parameter, then validates that
+    the museum_id is contained in the ods:physicalSpecimenID of the first result.
 
     Args:
         museum_id: The Museum ID / catalog number from BCDM (records[0].museumid)
@@ -168,23 +169,21 @@ async def lookup_specimen_in_disscover(
             pass
 
     # Search Strategy:
-    # 1. PRIMARY: Exact match using $filter.physicalSpecimenId
-    # 2. FALLBACK: Free-text search in case of formatting differences
-
-    search_strategies = [
-        # Primary: Exact filter match on physicalSpecimenId
-        {"physicalSpecimenId": museum_id, "pageSize": "10"},
-        # Fallback: Free-text search
-        {"q": museum_id, "pageSize": "10"},
-    ]
+    # Use free-text search with 'q' parameter since physicalSpecimenId filter
+    # requires the full URL (e.g., https://data.biodiversitydata.nl/naturalis/specimen/RMNH.INS.1234)
+    # which the client cannot know.
 
     logger.info(f"DiSSCover lookup for museumid: {museum_id}")
 
-    # Try each strategy until we get results
-    for params in search_strategies:
-        api_response = await _query_disscover(params)
+    api_response = await _query_disscover({"q": museum_id, "pageSize": "10"})
 
-        if api_response and api_response.get("data"):
+    if api_response and api_response.get("data"):
+        # Verify that the first result actually matches by checking if museum_id
+        # is a substring of ods:physicalSpecimenID (case-insensitive comparison)
+        first_result = api_response["data"][0]
+        physical_specimen_id = first_result.get("attributes", {}).get("ods:physicalSpecimenID", "")
+
+        if museum_id.lower() in physical_specimen_id.lower():
             result = _parse_disscover_response(api_response)
 
             # Cache successful results
@@ -195,6 +194,8 @@ async def lookup_specimen_in_disscover(
 
             logger.info(f"DiSSCover specimen found for museumid: {museum_id}")
             return result
+        else:
+            logger.info(f"DiSSCover result does not match museumid: {museum_id} not in {physical_specimen_id}")
 
     # No results from any strategy
     result = {
@@ -276,9 +277,10 @@ async def lookup_specimen_in_dissco(
 
     **Primary Lookup Method**
 
-    This endpoint searches DiSSCover using the `$filter.physicalSpecimenId` parameter,
-    which maps directly to the BCDM `museumid` field. This provides the most reliable
-    link between BOLD records and DiSSCover Digital Specimens.
+    This endpoint searches DiSSCover using a free-text search with the `q` parameter,
+    then validates that the museum_id is contained in the `ods:physicalSpecimenID`
+    of the first result. This is necessary because the physicalSpecimenId filter
+    requires the full URL prefix which the client cannot know.
 
     **Parameters:**
     - **museum_id**: The Museum ID / catalog number from the BCDM (e.g., RMNH.INS.12345)
@@ -301,7 +303,7 @@ async def lookup_specimen_in_dissco(
             detail="DiSSCo integration is currently disabled",
         )
 
-    # Perform lookup using Museum ID (physicalSpecimenId)
+    # Perform lookup using Museum ID
     result = await lookup_specimen_in_disscover(museum_id)
 
     return DiSSCoSpecimenResponse(**result)
