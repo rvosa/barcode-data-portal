@@ -100,7 +100,7 @@
                         if (response.dissco_id) {
                             $('#dissco-id-row').show();
                             let doiDisplay = response.dissco_id.replace('https://doi.org/', '');
-                            $('#dissco-id').html('<a href="' + response.specimen_url + '" target="_blank" class="navy-link">' + doiDisplay + ' <i class="fa fa-external-link"></i></a>');
+                            $('#dissco-id').html('<a href="' + response.dissco_id + '" target="_blank" class="navy-link">' + doiDisplay + ' <i class="fa fa-external-link"></i></a>');
                         }
 
                         // Institution
