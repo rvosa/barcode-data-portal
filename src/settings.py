@@ -36,5 +36,11 @@ class Settings(BaseSettings):
     app_url: str = "http://fastapi-app:8000"
     caos_url: str = "https://caos.boldsystems.org"
 
+    # DiSSCo Integration Settings
+    dissco_api_url: str = "https://disscover.dissco.eu/api"
+    dissco_timeout: int = 30
+    dissco_cache_ttl: int = 3600
+    dissco_enabled: bool = True
+
 
 settings = Settings()
