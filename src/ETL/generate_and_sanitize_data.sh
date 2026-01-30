@@ -23,7 +23,7 @@ mv $IMPORT_DIR/bold_singlepane_public_export_filtered.jsonl $IMPORT_DIR/bold_sin
 printf "Step 4: Generate summary and terms documents\n"
 python ETL/extract_terms_and_summary_from_BCDM.py --summary_file $IMPORT_DIR/tax_geo_inst_summaries.jsonl --terms_file $IMPORT_DIR/accepted_terms.jsonl < $IMPORT_DIR/bold_singlepane_public_export.jsonl
 python ETL/extract_minimized_terms_with_inst_bins_ids_codes_BCDM.py --terms_file $IMPORT_DIR/accepted_terms_contd.jsonl < $IMPORT_DIR/bold_singlepane_public_export.jsonl
-cat $IMPORT_DIR/accepted_terms.jsonl $IMPORT_DIR/accepted_terms_contd.jsonl > $IMPORT_DIR/accepted_terms_combined.jsonl
+cat $IMPORT_DIR/accepted_terms.jsonl $IMPORT_DIR/accepted_terms_contd.jsonl | jq -c 'select(.term != "" and .term != null)' > $IMPORT_DIR/accepted_terms_combined.jsonl
 rm $IMPORT_DIR/accepted_terms.jsonl $IMPORT_DIR/accepted_terms_contd.jsonl
 
 printf "Step 4.1 Generate country summary\n"

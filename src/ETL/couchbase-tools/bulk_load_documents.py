@@ -16,8 +16,6 @@ from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
 from couchbase.options import ClusterOptions
 
-_BATCH_SIZE = 10000
-
 
 def get_cluster(username, password, endpoint):
     options = ClusterOptions(PasswordAuthenticator(username, password))
@@ -49,9 +47,10 @@ def main(args):
     success_upload = 0
     failed_upload = 0
     start_time = time.perf_counter()
+    batch_size = args.batch_size
 
     logger.info(f"Starting bulk load from {args.file.name}")
-    logger.debug(f"Batch size: {_BATCH_SIZE}")
+    logger.debug(f"Batch size: {batch_size}")
 
     for document in args.file:
         document = ujson.loads(document)
@@ -62,7 +61,7 @@ def main(args):
         key = str(document[args.primary_key])
         documents[key] = document
 
-        if len(documents) >= _BATCH_SIZE:
+        if len(documents) >= batch_size:
             result = collection.insert_multi(documents)
             elapsed_time = time.perf_counter() - start_time
             logger.info(f"Uploaded {len(result.results)} documents in {elapsed_time:.2f} seconds")
@@ -127,6 +126,13 @@ if __name__ == "__main__":
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging verbosity level (default: INFO)"
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        default=10000,
+        type=int,
+        help="Set the number of document per batch (default: 10000)"
     )
 
     args = parser.parse_args()
