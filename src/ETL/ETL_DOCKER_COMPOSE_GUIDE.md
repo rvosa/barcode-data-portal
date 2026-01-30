@@ -18,11 +18,16 @@ For the Naturalis installation, connect to the development server and navigate t
 # SSH into the development server
 ssh dev-bold-app.hosts.naturalis.io
 
+# The .env file is only readable by root, so switch to root user
+sudo su
+
 # Navigate to the Docker Compose project directory
 cd /opt/compose_projects/fastapi_app/compose
 ```
 
 All ETL tasks should be executed from this directory where the Docker Compose files and `.env` configuration are located.
+
+**Important:** The Docker Compose configuration maps `/data/import` on the host to `/import` inside the container. When running commands inside the container, use `/import` as the working directory path.
 
 ## Prerequisites
 
@@ -337,47 +342,61 @@ python src/ETL/couchbase-tools/run_query.py \
 
 ## Running ETL Inside Docker Containers
 
-The ETL pipeline runs on the cluster node where `/data/import` and `/data/import_registries` are located.
+The ETL pipeline runs on the cluster node where `/data/import` and `/data/import_registries` are located. The Docker Compose configuration maps `/data/import` on the host to `/import` inside the container.
 
 ### Method 1: Execute on the FastAPI Container
 
-```bash
-# Copy data files to the container (if not using volume mounts)
-docker cp /data/import/. fastapi-app-production:/data/import/
+On the Naturalis development server, the container is named `compose-fastapi-app-1`:
 
-# Execute the bootstrap script inside the container
-docker exec -it fastapi-app-production bash -c "
-    source /app/.env
-    bash /app/src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
+```bash
+# First, ensure you are root (required to read .env file)
+sudo su
+
+# Navigate to the Docker Compose project directory
+cd /opt/compose_projects/fastapi_app/compose
+
+# Execute a shell inside the container
+# Note: /data/import on host is mounted as /import inside the container
+docker exec -it compose-fastapi-app-1 bash
+
+# Inside the container, the data files are available at /import
+ls /import
+```
+
+To run the bootstrap script inside the container:
+```bash
+docker exec -it compose-fastapi-app-1 bash -c "
+    bash /app/src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
 "
 ```
 
 ### Method 2: Run a Dedicated ETL Container
 
-Create a one-off container for ETL operations, mounting the `/data` directory from the host:
-```bash
-# For production deployment (uses backend-production network)
-docker run --rm \
-    --network barcode-data-portal_backend-production \
-    -v /data:/data \
-    -v $(pwd):/app \
-    -w /app \
-    --env-file .env \
-    fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
+Create a one-off container for ETL operations. Note that `/data/import` on the host should be mounted to `/import` inside the container to match the existing configuration:
 
-# For development deployment (uses backend network)
+```bash
+# For production deployment on Naturalis server (project name is 'compose')
 docker run --rm \
-    --network barcode-data-portal_backend \
-    -v /data:/data \
+    --network compose_backend-production \
+    -v /data/import:/import \
     -v $(pwd):/app \
     -w /app \
     --env-file .env \
     fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /data/import
+    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
+
+# For development deployment on Naturalis server
+docker run --rm \
+    --network compose_backend \
+    -v /data/import:/import \
+    -v $(pwd):/app \
+    -w /app \
+    --env-file .env \
+    fastapi-app:latest \
+    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
 ```
 
-**Note:** The network name format is `<project-name>_<network-name>`. Replace `barcode-data-portal` with your actual project directory name if different.
+**Note:** The network name format is `<project-name>_<network-name>`. On the Naturalis server (`dev-bold-app.hosts.naturalis.io`), the project name is `compose`, so the networks are `compose_backend` and `compose_backend-production`.
 
 ## Couchbase Bucket Structure
 
