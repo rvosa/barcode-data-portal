@@ -363,11 +363,31 @@ docker exec -it compose-fastapi-app-1 bash
 ls /import
 ```
 
+**Important:** When you enter the container, the working directory is `/app`. All ETL scripts must be invoked from this directory using relative paths (without the `src/` prefix since you're already in the app directory).
+
+Set up the working directory variable and run scripts from `/app`:
+```bash
+# Inside the container (working directory is /app)
+WORKING_DIR="/import"
+
+# Run the data generation script in the background using nohup
+nohup bash ETL/generate_and_sanitize_data.sh $WORKING_DIR &
+
+# Check progress
+tail -f nohup.out
+```
+
 To run the bootstrap script inside the container:
 ```bash
+# From the host, execute directly in the container
 docker exec -it compose-fastapi-app-1 bash -c "
-    bash /app/src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
+    WORKING_DIR=/import
+    nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh \$WORKING_DIR &
 "
+
+# Or interactively from within the container (after docker exec -it compose-fastapi-app-1 bash)
+WORKING_DIR="/import"
+nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh $WORKING_DIR &
 ```
 
 ### Method 2: Run a Dedicated ETL Container
@@ -376,6 +396,7 @@ Create a one-off container for ETL operations. Note that `/data/import` on the h
 
 ```bash
 # For production deployment on Naturalis server (project name is 'compose')
+# The working directory is /app, so use relative paths for scripts
 docker run --rm \
     --network compose_backend-production \
     -v /data/import:/import \
@@ -383,7 +404,7 @@ docker run --rm \
     -w /app \
     --env-file .env \
     fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
+    bash ETL/couchbase-tools/bootstrap_couchbase.sh /import
 
 # For development deployment on Naturalis server
 docker run --rm \
@@ -393,7 +414,7 @@ docker run --rm \
     -w /app \
     --env-file .env \
     fastapi-app:latest \
-    bash src/ETL/couchbase-tools/bootstrap_couchbase.sh /import
+    bash ETL/couchbase-tools/bootstrap_couchbase.sh /import
 ```
 
 **Note:** The network name format is `<project-name>_<network-name>`. On the Naturalis server (`dev-bold-app.hosts.naturalis.io`), the project name is `compose`, so the networks are `compose_backend` and `compose_backend-production`.
