@@ -14,6 +14,7 @@ DROP COLLECTION `DERIVED`.`_default`.`bin_summaries` IF EXISTS;
 DROP COLLECTION `DERIVED`.`_default`.`dataset_summaries` IF EXISTS;
 DROP COLLECTION `DERIVED`.`_default`.`primer_summaries` IF EXISTS;
 DROP COLLECTION `DERIVED`.`_default`.`taxonomy_summaries` IF EXISTS;
+DROP COLLECTION `DERIVED`.`_default`.`specimen_ranks` IF EXISTS;
 
 CREATE COLLECTION `DERIVED`.`_default`.`accepted_terms`;
 CREATE COLLECTION `DERIVED`.`_default`.`tax_geo_inst_summaries`;
@@ -24,6 +25,7 @@ CREATE COLLECTION `DERIVED`.`_default`.`bin_summaries`;
 CREATE COLLECTION `DERIVED`.`_default`.`dataset_summaries`;
 CREATE COLLECTION `DERIVED`.`_default`.`primer_summaries`;
 CREATE COLLECTION `DERIVED`.`_default`.`taxonomy_summaries`;
+CREATE COLLECTION `DERIVED`.`_default`.`specimen_ranks`;
 
 -- BUCKET: ANCILLARY
 
