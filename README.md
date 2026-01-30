@@ -7,6 +7,15 @@ The BOLD Portal is designed for multi-institutional deployment, enabling data mi
 
 Developed with an API-first architecture, the application provides a robust API that enables seamless extensions without modifications to the core codebase. Released under the AGPL license, the BOLD Portal promotes open access, collaboration, and interoperability within the global biodiversity informatics community.
 
+## Database Architecture
+
+The BOLD system uses a dual-database architecture:
+
+- **PostgreSQL**: Primary database for the Data Submission Workbench (a separate system) where data is initially collected, curated, and managed by researchers.
+
+- **Couchbase**: NoSQL database powering the Public Portal, populated through scheduled ETL processes from PostgreSQL. Optimized for high-performance querying and flexible document schema to support the portal's needs.
+
+Data flows from PostgreSQL to Couchbase through ETL processes that run on weekly and quarterly schedules.
 
 ## Requirements
 
@@ -30,7 +39,7 @@ Requirements:
 - [Tilt](https://docs.tilt.dev/install.html)
 
 ```bash
-REPO_DIR="bold-public-portal"
+REPO_DIR="barcode-data-portal"
 
 # Spool Up
 cd $REPO_DIR
@@ -49,7 +58,7 @@ tilt down -f docker/Tiltfile
 Check that `.env` is configured correctly and to production values. The following assumes the ansible playbook is not being used and Couchbase is hosted on a different server.
 
 ```bash
-REPO_DIR="bold-public-portal"
+REPO_DIR="barcode-data-portal"
 
 # Spool Up
 cd $REPO_DIR
@@ -85,8 +94,6 @@ See `CYPRESS.md`
 
 ## File Organization
 
-- `ansible`
-  - Ansible playbooks and deployment
 - `db_data`
   - Local simulated database data
 - `docker`
@@ -95,20 +102,41 @@ See `CYPRESS.md`
   - Main source code
   - `cypress`
     - Cypress testing configuration
-  - `docs`
-    - Additional documentation
+    - `e2e`
+      - `services`  # Tests for API services
+      - `views`     # Tests for web views
+    - `user_journey` # End-to-end user flow tests
+    - `plugins`      # Cypress plugins configuration
+    - `support`      # Support files and custom commands
+    - `templates`    # Templates for creating new tests
   - `ETL`
     - Data (BCDM) extraction, transformation, and loading
+    - `couchbase-tools` # Tools for Couchbase operations
+    - `postprocess`     # Post-processing scripts
   - `services`
     - API services; serve the application data but can also be used independently
   - `static`
     - Assets for application presentation
+    - `css`          # CSS stylesheets
+    - `js`           # JavaScript files
+    - `img`          # Images and media
+    - `wp-content`   # WordPress content assets
+    - `wp-includes`  # WordPress core assets
+    - `wp-json`      # WordPress API responses
   - `templates`
     - Jinja2/HTML application layout
+    - `includes`     # Reusable template components
+    - `wp-templates` # WordPress content templates
   - `tools`
     - Miscellaneous tools for the application
   - `views`
     - Application view controllers
+
+## WordPress Integration
+
+The BOLD Public Portal integrates with WordPress as a headless CMS. This allows content to be authored in WordPress while being displayed seamlessly within the application.
+
+**Note**: The exact implementation details of the WordPress integration require further clarification from the BOLD designers at CBG in Guelph.
 
 ## Citation
 
@@ -118,14 +146,3 @@ See `CYPRESS.md`
     institution={Centre for Biodiversity Genomics},
     year={2025}
 }
-
-
-## Funding Acknowledgements
-
-This project was made possible through the support of:
-
-- Canada Foundation for Innovation Major Science Iniatives Fund (MSIF)
-- Genome Canada & Ontario Genomics
-- Ontario Ministry of Colleges and Universities
-- New Frontiers in Research Fund (NFRF)-Transformation
-

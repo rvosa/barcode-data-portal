@@ -49,7 +49,7 @@ services:
       - backend
     volumes:
     # The volume used by the logging service:
-      - /var/log/bold-public-portal:/var/log/bold-public-portal
+      - ${DATA_PATH:-/data}/log/bold-public-portal:/var/log/bold-public-portal
     # The name of the running Docker container
     container_name: socketserver-logging
 

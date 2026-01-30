@@ -1,3 +1,4 @@
+import os
 import pathlib
 
 from pydantic_settings import BaseSettings
@@ -5,8 +6,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_root: str = pathlib.Path(__file__).parent.resolve().as_posix()
-    app_name: str = "fastapi-app"
-    app_port: int = 8000
+    app_name: str = os.getenv("APP_NAME", default="fastapi-app")
+    app_port: int = os.getenv("APP_PORT", default=8000)
 
     log_config_path: str = (
         pathlib.Path(__file__).with_name("logging.ini").resolve().as_posix()
@@ -27,13 +28,19 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
-    couchbase_endpoint: str = "couchbase://couchbase"
-    couchbase_user: str = ""
-    couchbase_password: str = ""
+    couchbase_endpoint: str = os.getenv("COUCHBASE_ENDPOINT", default="couchbase://couchbase")
+    couchbase_user: str = os.getenv("COUCHBASE_USER", default="")
+    couchbase_password: str = os.getenv("COUCHBASE_PASSWORD", default="")
     couchbase_timeout: int = 7200
 
     app_url: str = "http://fastapi-app:8000"
     caos_url: str = "https://caos.boldsystems.org"
+
+    # DiSSCo Integration Settings
+    dissco_api_url: str = "https://disscover.dissco.eu/api"
+    dissco_timeout: int = 30
+    dissco_cache_ttl: int = 3600
+    dissco_enabled: bool = True
 
 
 settings = Settings()

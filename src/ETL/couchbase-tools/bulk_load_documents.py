@@ -2,9 +2,11 @@
 use:
     python bulk_load_documents.py --username user --password 'password' --endpoint couchbase://localhost --primary-key key --file documents.jsonl
     python bulk_load_documents.py --username user --password 'password' --endpoint couchbase://localhost --primary-key key --bucket bucket --scope _default --collection _default --file documents.jsonl
+    python bulk_load_documents.py --username user --password 'password' --endpoint couchbase://localhost --primary-key key --file documents.jsonl --verbosity DEBUG
 """
 
 import argparse
+import logging
 import sys
 import time
 import ujson
@@ -25,6 +27,19 @@ def get_cluster(username, password, endpoint):
 
 
 def main(args):
+    # Configure logging
+    numeric_level = getattr(logging, args.verbosity.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError(f'Invalid verbosity level: {args.verbosity}')
+
+    logging.basicConfig(
+        level=numeric_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stderr
+    )
+    logger = logging.getLogger(__name__)
+
+    logger.debug(f"Connecting to {args.endpoint}")
     cluster = get_cluster(args.username, args.password, args.endpoint)
     bucket = cluster.bucket(args.bucket)
     scope = bucket.scope(args.scope)
@@ -34,22 +49,31 @@ def main(args):
     success_upload = 0
     failed_upload = 0
     start_time = time.perf_counter()
+
+    logger.info(f"Starting bulk load from {args.file.name}")
+    logger.debug(f"Batch size: {_BATCH_SIZE}")
+
     for document in args.file:
         document = ujson.loads(document)
         if args.primary_key not in document:
             failed_upload += 1
+            logger.warning(f"Document missing primary key '{args.primary_key}'")
             continue
         key = str(document[args.primary_key])
         documents[key] = document
 
         if len(documents) >= _BATCH_SIZE:
             result = collection.insert_multi(documents)
-            print(
-                f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
-                file=sys.stderr,
-            )
+            elapsed_time = time.perf_counter() - start_time
+            logger.info(f"Uploaded {len(result.results)} documents in {elapsed_time:.2f} seconds")
+
             success_upload += len(result.results)
             failed_upload += len(result.exceptions)
+
+            if result.exceptions:
+                logger.warning(f"Failed to upload {len(result.exceptions)} documents in this batch")
+                for key, exception in result.exceptions.items():
+                    logger.debug(f"Failed document key: {key}, error: {exception}")
 
             del documents
             documents = {}
@@ -57,39 +81,52 @@ def main(args):
 
     if documents:
         result = collection.insert_multi(documents)
-        print(
-            f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
-            file=sys.stderr,
-        )
+        elapsed_time = time.perf_counter() - start_time
+        logger.info(f"Uploaded {len(result.results)} documents in {elapsed_time:.2f} seconds")
+
         success_upload += len(result.results)
         failed_upload += len(result.exceptions)
 
-    print(f"Successfully Uploaded {success_upload}", file=sys.stderr)
+        if result.exceptions:
+            logger.warning(f"Failed to upload {len(result.exceptions)} documents in final batch")
+            for key, exception in result.exceptions.items():
+                logger.debug(f"Failed document key: {key}, error: {exception}")
+
+    logger.info(f"Successfully uploaded {success_upload} documents")
 
     if failed_upload:
-        print(
-            f"Failed to Upload {failed_upload}",
-            file=sys.stderr,
-        )
+        logger.warning(f"Failed to upload {failed_upload} documents")
+
+    logger.info("Bulk load completed")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Bulk load JSON documents into Couchbase",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
 
-    parser.add_argument("--username", required=True, type=str)
-    parser.add_argument("--password", required=True, type=str)
-    parser.add_argument("--endpoint", required=True, type=str)
-    parser.add_argument("--primary-key", required=True, type=str)
+    parser.add_argument("--username", required=True, type=str, help="Couchbase username")
+    parser.add_argument("--password", required=True, type=str, help="Couchbase password")
+    parser.add_argument("--endpoint", required=True, type=str, help="Couchbase endpoint (e.g., couchbase://localhost)")
+    parser.add_argument("--primary-key", required=True, type=str, help="Field name to use as document key")
 
-    parser.add_argument("--bucket", default="BCDM", type=str)
-    parser.add_argument("--scope", default="_default", type=str)
-    parser.add_argument("--collection", default="primary", type=str)
+    parser.add_argument("--bucket", default="BCDM", type=str, help="Couchbase bucket name (default: BCDM)")
+    parser.add_argument("--scope", default="_default", type=str, help="Couchbase scope (default: _default)")
+    parser.add_argument("--collection", default="primary", type=str, help="Couchbase collection (default: primary)")
 
     parser.add_argument(
         "--file",
         required=True,
         type=argparse.FileType("r"),
-        help="File containing one document per line.",
+        help="File containing one document per line (JSONL format)"
+    )
+
+    parser.add_argument(
+        "--verbosity",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging verbosity level (default: INFO)"
     )
 
     args = parser.parse_args()

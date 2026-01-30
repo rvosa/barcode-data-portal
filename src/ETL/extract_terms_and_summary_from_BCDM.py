@@ -57,7 +57,7 @@ def summarize(input):
             pid_map[record["processid"]] = len(pid_map)
 
         # rounding off geo coord
-        if "coord" in record and len(record["coord"]) == 2:
+        if record.get("coord") is not None and len(record["coord"]) == 2:
             record["coord"] = (
                 round(record["coord"][0], 1),
                 round(record["coord"][1], 1),
@@ -68,7 +68,7 @@ def summarize(input):
             record["sequence_upload_date"] = record["sequence_upload_date"][:7]
 
         if (
-            "collection_date_start" in record
+            record.get("collection_date_start") is not None
             and len(record["collection_date_start"]) > 5
         ):
             record["collection_date_start"] = record["collection_date_start"][:7]
@@ -249,15 +249,15 @@ def write_summaries(summaries, summary_file):
 def write_terms(terms, terms_file):
     with open(terms_file, "w") as f:
         for term, info in terms.items():
-            info["term"] = term
-            # lowercase
-            info["standardized_term"] = (
-                term.strip().lower().translate(str_sanitize_mapping)
-            )
-            info["original_term"] = term.strip()
-            info["priority"] = 1  # TODO: add different priority value
-            f.write(json.dumps(info) + "\n")
-
+            if term is not None:
+                info["term"] = term
+                # lowercase
+                info["standardized_term"] = (
+                    term.strip().lower().translate(str_sanitize_mapping)
+                )
+                info["original_term"] = term.strip()
+                info["priority"] = 1  # TODO: add different priority value
+                f.write(json.dumps(info) + "\n")
 
 if __name__ == "__main__":
 
