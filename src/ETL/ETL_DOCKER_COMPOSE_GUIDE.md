@@ -10,6 +10,20 @@ When deploying the BOLD Public Portal using Docker Compose, the ETL pipeline loa
 2. **Derived data** - Aggregated summaries and accepted search terms
 3. **Ancillary data** - Registry information (datasets, taxonomies, institutions, etc.)
 
+## Naturalis Development Server
+
+For the Naturalis installation, connect to the development server and navigate to the Docker Compose project directory:
+
+```bash
+# SSH into the development server
+ssh dev-bold-app.hosts.naturalis.io
+
+# Navigate to the Docker Compose project directory
+cd /opt/compose_projects/fastapi_app/compose
+```
+
+All ETL tasks should be executed from this directory where the Docker Compose files and `.env` configuration are located.
+
 ## Prerequisites
 
 ### Server Requirements
@@ -80,8 +94,8 @@ docker compose -f docker-compose-production.yml up -d
 ### Step 1: Prepare the Environment
 
 ```bash
-# Navigate to the repository root
-cd /path/to/bold-public-portal
+# Navigate to the Docker Compose project directory (on dev-bold-app.hosts.naturalis.io)
+cd /opt/compose_projects/fastapi_app/compose
 
 # Set up environment variables (from .env file)
 source .env
