@@ -2,7 +2,7 @@
 
 - name: Create project dir
   ansible.builtin.file:
-    dest: /opt/compose_projects/{{ project }}
+    dest: /opt/compose_projects/{{ project }}/compose
     state: directory
     mode: "0755"
     owner: root

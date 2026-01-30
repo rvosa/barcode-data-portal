@@ -72,7 +72,6 @@ hadolint:
   image: hadolint/hadolint:latest-debian
   script:
     - hadolint docker/Dockerfile
-    - hadolint docker/Dockerfile.socketserver_logging
 
 ShellCheck:
   stage: check
@@ -178,7 +177,6 @@ Trivy vulnerability scanner:
     - cat .trivyignore
     - trivy --cache-dir .trivy/ --quiet
     - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --removed-pkgs "$CI_REGISTRY_IMAGE/fastapi-app:build_$CI_COMMIT_REF_SLUG"
-    - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --removed-pkgs "$CI_REGISTRY_IMAGE/socketserver-logging:build_$CI_COMMIT_REF_SLUG"
 
 Image publish:
   stage: publish
@@ -193,7 +191,6 @@ Image publish:
     - echo -n $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
   script:
     - docker/publish.sh "fastapi-app"
-    - docker/publish.sh "socketserver-logging"
 
 # Deploy git branch develop and any feature branch that is manually run from GitLab to development
 Development deploy:
