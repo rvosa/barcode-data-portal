@@ -28,6 +28,7 @@ from services import (
     qr,
     terms,
     develop,
+    dissco,
     ranking,
 )
 from views import (
@@ -74,6 +75,7 @@ api_router.include_router(qr.route)
 api_router.include_router(ranking.route)
 api_router.include_router(test.route)
 api_router.include_router(develop.route)
+api_router.include_router(dissco.route)
 
 app.include_router(api_router)
 
