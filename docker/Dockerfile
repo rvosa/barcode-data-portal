@@ -17,6 +17,11 @@ RUN set -eux; \
 RUN mkdir -p /opt/modules && \
     mkdir -p /tmp/bold-public-portal/cache
 
+# Install redis-cli for ETL scripts
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends redis-tools && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create modules directory and add modules
 WORKDIR /opt/modules/barcode-core-data-model
 ADD https://us-east-1.linodeobjects.com/bold-reference-files-public/field_definitions.tsv /opt/modules/barcode-core-data-model/
