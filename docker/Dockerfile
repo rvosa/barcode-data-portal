@@ -18,6 +18,7 @@ RUN mkdir -p /opt/modules && \
     mkdir -p /tmp/bold-public-portal/cache
 
 # Install redis-cli for ETL scripts
+# hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends redis-tools && \
     rm -rf /var/lib/apt/lists/*
