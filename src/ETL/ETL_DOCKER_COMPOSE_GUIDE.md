@@ -12,7 +12,7 @@ When deploying the BOLD Public Portal using Docker Compose, the ETL pipeline loa
 
 ## Naturalis Development Server
 
-For the Naturalis installation, connect to the development server and navigate to the Docker Compose project directory:
+For the Naturalis installation, connect to the development server:
 
 ```bash
 # SSH into the development server
@@ -25,9 +25,7 @@ sudo su
 cd /opt/compose_projects/fastapi_app/compose
 ```
 
-All ETL tasks should be executed from this directory where the Docker Compose files and `.env` configuration are located.
-
-**Important:** The Docker Compose configuration maps `/data/import` on the host to `/import` inside the container. When running commands inside the container, use `/import` as the working directory path.
+**Volume Mapping:** The Docker Compose configuration maps `/data/import` on the host to `/import` inside the container.
 
 ## Prerequisites
 
@@ -49,9 +47,9 @@ All ETL tasks should be executed from this directory where the Docker Compose fi
 - `bold_primer_registry.jsonl.gz`
 - `bold_taxonomy_registry.jsonl.gz`
 
-### Recommended Directory Structure
+### Directory Structure
 
-On the cluster node hosting the web app and Docker container, data files are organized under `/data`:
+On the cluster node, data files are organized under `/data`:
 
 ```
 /data/
@@ -78,275 +76,11 @@ On the cluster node hosting the web app and Docker container, data files are org
     └── *.log                                    # Import and processing logs
 ```
 
-## Docker Compose Configuration
+## Running ETL Inside the Docker Container
 
-### Development Environment
-Use `docker-compose.yml` which includes a local Couchbase container:
-```bash
-docker compose up -d
-```
+On the Naturalis development server, the container is named `compose-fastapi-app-1`. All ETL commands are run inside this container from the `/app` working directory.
 
-### Production Environment
-Use `docker-compose-production.yml` which connects to an external Couchbase server:
-```bash
-docker compose -f docker-compose-production.yml up -d
-```
-
-**Note:** The production Docker Compose file does not include Couchbase as it's expected to be hosted externally. You must ensure Couchbase is accessible via the `COUCHBASE_ENDPOINT` environment variable.
-
-## ETL Pipeline Execution Steps
-
-### Step 1: Prepare the Environment
-
-```bash
-# Navigate to the Docker Compose project directory (on dev-bold-app.hosts.naturalis.io)
-cd /opt/compose_projects/fastapi_app/compose
-
-# Set up environment variables (from .env file)
-source .env
-export COUCHBASE_ENDPOINT
-export COUCHBASE_USER
-export COUCHBASE_PASSWORD
-export REDIS_HOST
-
-# Data directories on the cluster node (inside /data)
-REGISTRY_DIR="/data/import_registries"    # Compressed source registries
-WORKING_DIR="/data/import"                 # Working directory for ETL
-
-# Verify directories exist
-ls $REGISTRY_DIR
-ls $WORKING_DIR
-```
-
-### Step 2: Download and Extract Data Files
-
-The registry files are stored compressed in `/data/import_registries`. Extract them to the working directory `/data/import`:
-
-```bash
-# Extract primary BCDM data to working directory (if stored compressed)
-# gunzip -c $WORKING_DIR/bold_singlepane_public_export.jsonl.gz > $WORKING_DIR/bold_singlepane_public_export.jsonl
-
-# Extract registries from import_registries to import directory
-gunzip -c $REGISTRY_DIR/bold_dataset_registry.jsonl.gz > $WORKING_DIR/bold_dataset_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_barcodecluster_registry.jsonl.gz > $WORKING_DIR/bold_barcodecluster_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_geopol_registry.jsonl.gz > $WORKING_DIR/bold_geopol_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_institution_registry.jsonl.gz > $WORKING_DIR/bold_institution_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_primer_registry.jsonl.gz > $WORKING_DIR/bold_primer_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_taxonomy_registry.jsonl.gz > $WORKING_DIR/bold_taxonomy_registry.jsonl
-```
-
-**Note:** Using `gunzip -c` preserves the original compressed files in `/data/import_registries` for future reference.
-
-### Step 3: Generate Derived Data (Summaries and Terms)
-
-Generate summary files from the primary BCDM data:
-
-```bash
-# Generate summaries and terms from BCDM data
-bash src/ETL/generate_and_sanitize_data.sh $WORKING_DIR
-```
-
-This script creates the following derived files:
-- `tax_geo_inst_summaries.jsonl`
-- `country_summaries.jsonl`
-- `institution_summaries.jsonl`
-- `sequence_run_site_summaries.jsonl`
-- `bin_summaries.jsonl`
-- `dataset_summaries.jsonl`
-- `primer_summaries.jsonl`
-- `taxonomy_summaries.jsonl`
-- `accepted_terms_combined.jsonl`
-
-### Step 4: Bootstrap Empty Couchbase
-
-#### Option A: Using the Bootstrap Script
-
-For a fresh installation, run the bootstrap script:
-
-```bash
-bash src/ETL/couchbase-tools/bootstrap_couchbase.sh $WORKING_DIR
-```
-
-This script performs all steps sequentially (collections, data loading, indexes).
-
-#### Option B: Manual Step-by-Step Execution
-
-For more control, execute each step manually:
-
-**Step 4.1: Create Collections**
-```bash
-python src/ETL/couchbase-tools/run_query.py \
-    --endpoint $COUCHBASE_ENDPOINT \
-    --username $COUCHBASE_USER \
-    --password $COUCHBASE_PASSWORD \
-    --file src/ETL/couchbase-tools/couchbase_collections.sql
-```
-
-**Step 4.2: Load Primary BCDM Documents**
-```bash
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --endpoint $COUCHBASE_ENDPOINT \
-    --username $COUCHBASE_USER \
-    --password $COUCHBASE_PASSWORD \
-    --primary-key 'record_id' \
-    --file $WORKING_DIR/bold_singlepane_public_export.jsonl
-```
-
-**Step 4.3: Load Derived Documents (Summaries and Terms)**
-```bash
-# Tax/Geo/Institution summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection tax_geo_inst_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'tax_geo_inst_id' \
-    --file $WORKING_DIR/tax_geo_inst_summaries.jsonl
-
-# Country summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection country_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'country/ocean' \
-    --file $WORKING_DIR/country_summaries.jsonl
-
-# Institution summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection institution_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'inst' \
-    --file $WORKING_DIR/institution_summaries.jsonl
-
-# Sequence run site summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection sequence_run_site_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'sequence_run_site' \
-    --file $WORKING_DIR/sequence_run_site_summaries.jsonl
-
-# BIN summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection bin_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'bin_uri' \
-    --file $WORKING_DIR/bin_summaries.jsonl
-
-# Dataset summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection dataset_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'dataset.code' \
-    --file $WORKING_DIR/dataset_summaries.jsonl
-
-# Primer summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection primer_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'name' \
-    --file $WORKING_DIR/primer_summaries.jsonl
-
-# Taxonomy summaries
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection taxonomy_summaries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'taxid' \
-    --file $WORKING_DIR/taxonomy_summaries.jsonl
-
-# Accepted terms
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket DERIVED --collection accepted_terms \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'term' \
-    --file $WORKING_DIR/accepted_terms_combined.jsonl
-```
-
-**Step 4.4: Load Ancillary Documents (Registries)**
-```bash
-# Datasets registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection datasets \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'dataset.code' \
-    --file $WORKING_DIR/bold_dataset_registry.jsonl
-
-# Barcode clusters registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection barcodeclusters \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'barcodecluster.uri' \
-    --file $WORKING_DIR/bold_barcodecluster_registry.jsonl
-
-# Countries/geopolitical registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection countries \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'name' \
-    --file $WORKING_DIR/bold_geopol_registry.jsonl
-
-# Institutions registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection institutions \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'name' \
-    --file $WORKING_DIR/bold_institution_registry.jsonl
-
-# Primers registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection primers \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'name' \
-    --file $WORKING_DIR/bold_primer_registry.jsonl
-
-# Taxonomies registry
-python src/ETL/couchbase-tools/bulk_load_documents.py \
-    --bucket ANCILLARY --collection taxonomies \
-    --endpoint $COUCHBASE_ENDPOINT --username $COUCHBASE_USER --password $COUCHBASE_PASSWORD \
-    --primary-key 'taxid' \
-    --file $WORKING_DIR/bold_taxonomy_registry.jsonl
-```
-
-**Step 4.5: Create Indexes**
-```bash
-python src/ETL/couchbase-tools/run_query.py \
-    --endpoint $COUCHBASE_ENDPOINT \
-    --username $COUCHBASE_USER \
-    --password $COUCHBASE_PASSWORD \
-    --file src/ETL/couchbase-tools/couchbase_index_definitions.sql
-```
-
-**Step 4.6: Handle Summary Exceptions**
-
-Some summaries may exceed Couchbase's document size limit. Handle these exceptions:
-```bash
-bash src/ETL/couchbase-tools/update_couchbase_summary_exceptions.sh $WORKING_DIR
-```
-
-### Step 5: Initialize Redis Cache
-
-After loading Couchbase, populate the Redis cache for optimal performance:
-
-```bash
-python src/tools/generateSummaryCache.py -i src/tools/summary_cache_queries.json
-python src/tools/generateTaxMapCache.py -i src/tools/tax_map_cache_queries.json
-python src/tools/generateStatsCache.py
-```
-
-### Step 6: Verify the Installation
-
-Test the Couchbase connection:
-```bash
-python src/ETL/couchbase-tools/run_query.py \
-    --endpoint $COUCHBASE_ENDPOINT \
-    --username $COUCHBASE_USER \
-    --password $COUCHBASE_PASSWORD \
-    --file src/ETL/couchbase-tools/query_to_check_connection.n1ql
-```
-
-## Running ETL Inside Docker Containers
-
-The ETL pipeline runs on the cluster node where `/data/import` and `/data/import_registries` are located. The Docker Compose configuration maps `/data/import` on the host to `/import` inside the container.
-
-### Method 1: Execute on the FastAPI Container
-
-On the Naturalis development server, the container is named `compose-fastapi-app-1`:
+### Accessing the Container
 
 ```bash
 # First, ensure you are root (required to read .env file)
@@ -356,57 +90,138 @@ sudo su
 cd /opt/compose_projects/fastapi_app/compose
 
 # Execute a shell inside the container
-# Note: /data/import on host is mounted as /import inside the container
 docker exec -it compose-fastapi-app-1 bash
 
-# Inside the container, the data files are available at /import
-ls /import
+# You are now at /app inside the container
+# Data files are available at /import (mapped from /data/import on host)
 ```
 
-**Important:** When you enter the container, the working directory is `/app`. All ETL scripts must be invoked from this directory using relative paths (without the `src/` prefix since you're already in the app directory).
+### Step 1: Extract Registry Files (on host, before entering container)
 
-Set up the working directory variable and run scripts from `/app`:
+Extract the registry files from `/data/import_registries` to `/data/import`:
+
+```bash
+# Run these commands on the host (not inside the container)
+REGISTRY_DIR="/data/import_registries"
+WORKING_DIR="/data/import"
+
+gunzip -c $REGISTRY_DIR/bold_dataset_registry.jsonl.gz > $WORKING_DIR/bold_dataset_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_barcodecluster_registry.jsonl.gz > $WORKING_DIR/bold_barcodecluster_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_geopol_registry.jsonl.gz > $WORKING_DIR/bold_geopol_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_institution_registry.jsonl.gz > $WORKING_DIR/bold_institution_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_primer_registry.jsonl.gz > $WORKING_DIR/bold_primer_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_taxonomy_registry.jsonl.gz > $WORKING_DIR/bold_taxonomy_registry.jsonl
+```
+
+### Step 2: Generate Derived Data
+
+Run `ETL/generate_and_sanitize_data.sh` inside the container. This script generates all summary files from the primary BCDM data.
+
 ```bash
 # Inside the container (working directory is /app)
 WORKING_DIR="/import"
-
-# Run the data generation script in the background using nohup
 nohup bash ETL/generate_and_sanitize_data.sh $WORKING_DIR &
 
 # Check progress
 tail -f nohup.out
 ```
 
-To run the bootstrap script inside the container:
-```bash
-# From the host, execute directly in the container
-docker exec -it compose-fastapi-app-1 bash -c "
-    WORKING_DIR=/import
-    nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh \$WORKING_DIR &
-"
+**This script performs the following steps internally:**
 
-# Or interactively from within the container (after docker exec -it compose-fastapi-app-1 bash)
+1. Applies BCDM policies to filter records (`ETL/apply_BCDM_policies.sh`)
+2. Extracts terms and tax/geo/inst summaries (`python ETL/extract_terms_and_summary_from_BCDM.py`)
+3. Extracts additional terms (`python ETL/extract_minimized_terms_with_inst_bins_ids_codes_BCDM.py`)
+4. Generates country summaries (`python ETL/extract_country_summary.py`)
+5. Generates institution summaries (`python ETL/extract_institution_summary.py`)
+6. Generates sequence run site summaries (`python ETL/extract_sequence_run_site_summary.py`)
+7. Generates BIN summaries (`python ETL/extract_bin_summary.py`)
+8. Generates dataset summaries (`python ETL/extract_dataset_summary.py`)
+9. Generates primer summaries (`python ETL/extract_primer_summary.py`)
+10. Sanitizes registry documents (filters empty names, handles UTF-8 encoding)
+11. Generates taxonomy summaries (`python ETL/extract_taxonomy_summary.py`)
+
+**Output files created:**
+- `tax_geo_inst_summaries.jsonl`
+- `country_summaries.jsonl` + `filtered_country_summaries.jsonl` + `reduced_country_summaries.jsonl`
+- `institution_summaries.jsonl` + `filtered_institution_summaries.jsonl` + `reduced_institution_summaries.jsonl`
+- `sequence_run_site_summaries.jsonl` + `filtered_sequence_run_site_summaries.jsonl` + `reduced_sequence_run_site_summaries.jsonl`
+- `bin_summaries.jsonl` + `filtered_bin_summaries.jsonl` + `reduced_bin_summaries.jsonl`
+- `dataset_summaries.jsonl` + `filtered_dataset_summaries.jsonl` + `reduced_dataset_summaries.jsonl`
+- `primer_summaries.jsonl` + `filtered_primer_summaries.jsonl` + `reduced_primer_summaries.jsonl`
+- `taxonomy_summaries.jsonl`
+- `accepted_terms_combined.jsonl`
+
+### Step 3: Bootstrap Couchbase
+
+Run `ETL/couchbase-tools/bootstrap_couchbase.sh` inside the container. This script loads all data into Couchbase.
+
+```bash
+# Inside the container (working directory is /app)
 WORKING_DIR="/import"
 nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh $WORKING_DIR &
+
+# Check progress
+tail -f nohup.out
 ```
 
-### Method 2: Run a Dedicated ETL Container
+**This script performs the following steps internally:**
 
-Create a one-off container for ETL operations. Note that `/data/import` on the host should be mounted to `/import` inside the container to match the existing configuration:
+1. **Create collections** (`python ETL/couchbase-tools/run_query.py` with `couchbase_collections.sql`)
+
+2. **Load primary BCDM documents** (`python ETL/couchbase-tools/bulk_load_documents.py`)
+   - Loads `bold_singlepane_public_export.jsonl` into `BCDM.primary`
+
+3. **Load derived summaries and terms** (`python ETL/couchbase-tools/bulk_load_documents.py` for each):
+   - `tax_geo_inst_summaries.jsonl` → `DERIVED.tax_geo_inst_summaries`
+   - `country_summaries.jsonl` → `DERIVED.country_summaries`
+   - `institution_summaries.jsonl` → `DERIVED.institution_summaries`
+   - `sequence_run_site_summaries.jsonl` → `DERIVED.sequence_run_site_summaries`
+   - `bin_summaries.jsonl` → `DERIVED.bin_summaries`
+   - `dataset_summaries.jsonl` → `DERIVED.dataset_summaries`
+   - `primer_summaries.jsonl` → `DERIVED.primer_summaries`
+   - `taxonomy_summaries.jsonl` → `DERIVED.taxonomy_summaries`
+   - `accepted_terms_combined.jsonl` → `DERIVED.accepted_terms`
+
+4. **Load ancillary registry documents** (`python ETL/couchbase-tools/bulk_load_documents.py` for each):
+   - `bold_dataset_registry.jsonl` → `ANCILLARY.datasets`
+   - `bold_barcodecluster_registry.jsonl` → `ANCILLARY.barcodeclusters`
+   - `bold_geopol_registry.jsonl` → `ANCILLARY.countries`
+   - `bold_institution_registry.jsonl` → `ANCILLARY.institutions`
+   - `bold_primer_registry.jsonl` → `ANCILLARY.primers`
+   - `bold_taxonomy_registry.jsonl` → `ANCILLARY.taxonomies`
+
+5. **Create indexes** (`python ETL/couchbase-tools/run_query.py` with `couchbase_index_definitions.sql`)
+
+### Step 4: Initialize Redis Cache
+
+After loading Couchbase, populate the Redis cache:
 
 ```bash
-# For production deployment on Naturalis server (project name is 'compose')
-# The working directory is /app, so use relative paths for scripts
-docker run --rm \
-    --network compose_backend-production \
-    -v /data/import:/import \
-    -v $(pwd):/app \
-    -w /app \
-    --env-file .env \
-    fastapi-app:latest \
-    bash ETL/couchbase-tools/bootstrap_couchbase.sh /import
+# Inside the container (working directory is /app)
+python tools/generateSummaryCache.py -i tools/summary_cache_queries.json
+python tools/generateTaxMapCache.py -i tools/tax_map_cache_queries.json
+python tools/generateStatsCache.py
+```
 
-# For development deployment on Naturalis server
+### Step 5: Verify the Installation
+
+Test the Couchbase connection:
+
+```bash
+# Inside the container (working directory is /app)
+python ETL/couchbase-tools/run_query.py \
+    --endpoint $COUCHBASE_ENDPOINT \
+    --username $COUCHBASE_USER \
+    --password $COUCHBASE_PASSWORD \
+    --file ETL/couchbase-tools/query_to_check_connection.n1ql
+```
+
+## Alternative: Run ETL via Docker Run
+
+Instead of using `docker exec`, you can run a one-off container:
+
+```bash
+# From the Docker Compose project directory on the host
 docker run --rm \
     --network compose_backend \
     -v /data/import:/import \
@@ -417,7 +232,7 @@ docker run --rm \
     bash ETL/couchbase-tools/bootstrap_couchbase.sh /import
 ```
 
-**Note:** The network name format is `<project-name>_<network-name>`. On the Naturalis server (`dev-bold-app.hosts.naturalis.io`), the project name is `compose`, so the networks are `compose_backend` and `compose_backend-production`.
+**Note:** The network name format is `<project-name>_<network-name>`. On the Naturalis server, the project name is `compose`, so the network is `compose_backend`.
 
 ## Couchbase Bucket Structure
 
@@ -463,7 +278,7 @@ ANCILLARY (bucket)
 
 ### Document Size Errors
 - Documents exceeding 20MB will be filtered automatically
-- Check the `update_couchbase_summary_exceptions.sh` script for handling large summaries
+- The `generate_and_sanitize_data.sh` script creates `filtered_*` and `reduced_*` files for handling large summaries
 
 ## Related Documentation
 
