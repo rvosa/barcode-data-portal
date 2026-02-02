@@ -12,9 +12,12 @@ from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
+from couchbase.exceptions import CouchbaseException
 from couchbase.options import ClusterOptions
 
 _BATCH_SIZE = 10000
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY = 5  # seconds
 
 
 def get_cluster(username, password, endpoint):
@@ -22,6 +25,28 @@ def get_cluster(username, password, endpoint):
     cluster = Cluster(endpoint, options)
     cluster.wait_until_ready(timedelta(seconds=5))
     return cluster
+
+
+def _upsert_multi_with_retry(collection, documents):
+    """Execute upsert_multi with retry logic for transient errors."""
+    last_exception = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            return collection.upsert_multi(documents)
+        except CouchbaseException as e:
+            last_exception = e
+            if attempt < _RETRY_ATTEMPTS - 1:
+                print(
+                    f"Retry {attempt + 1}/{_RETRY_ATTEMPTS} for upsert_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+                time.sleep(_RETRY_DELAY)
+            else:
+                print(
+                    f"All {_RETRY_ATTEMPTS} retry attempts failed for upsert_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+    raise last_exception
 
 
 # invoked as a standalone script to upsert using a document file
@@ -40,7 +65,7 @@ def upsert_documents_from_file(file, collection, primary_key):
         documents[key] = document
 
         if len(documents) >= _BATCH_SIZE:
-            result = collection.upsert_multi(documents)
+            result = _upsert_multi_with_retry(collection, documents)
             print(
                 f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -53,7 +78,7 @@ def upsert_documents_from_file(file, collection, primary_key):
             start_time = time.perf_counter()
 
     if documents:
-        result = collection.upsert_multi(documents)
+        result = _upsert_multi_with_retry(collection, documents)
         print(
             f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
@@ -87,7 +112,7 @@ def upsert_document_collection(cb_object, upsert_documents):
     for key, document in upsert_documents.items():
         documents[key] = document  # to build batches
         if len(documents) >= _BATCH_SIZE:
-            result = collection.upsert_multi(documents)
+            result = _upsert_multi_with_retry(collection, documents)
             print(
                 f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -101,7 +126,7 @@ def upsert_document_collection(cb_object, upsert_documents):
 
     # those that remain after batching finishes
     if documents:
-        result = collection.upsert_multi(documents)
+        result = _upsert_multi_with_retry(collection, documents)
         print(
             f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,

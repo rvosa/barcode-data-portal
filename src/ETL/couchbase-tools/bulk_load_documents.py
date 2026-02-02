@@ -12,9 +12,12 @@ from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
+from couchbase.exceptions import CouchbaseException
 from couchbase.options import ClusterOptions
 
 _BATCH_SIZE = 10000
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY = 5  # seconds
 
 
 def get_cluster(username, password, endpoint):
@@ -22,6 +25,28 @@ def get_cluster(username, password, endpoint):
     cluster = Cluster(endpoint, options)
     cluster.wait_until_ready(timedelta(seconds=5))
     return cluster
+
+
+def _insert_multi_with_retry(collection, documents):
+    """Execute insert_multi with retry logic for transient errors."""
+    last_exception = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            return collection.insert_multi(documents)
+        except CouchbaseException as e:
+            last_exception = e
+            if attempt < _RETRY_ATTEMPTS - 1:
+                print(
+                    f"Retry {attempt + 1}/{_RETRY_ATTEMPTS} for insert_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+                time.sleep(_RETRY_DELAY)
+            else:
+                print(
+                    f"All {_RETRY_ATTEMPTS} retry attempts failed for insert_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+    raise last_exception
 
 
 def main(args):
@@ -43,7 +68,7 @@ def main(args):
         documents[key] = document
 
         if len(documents) >= _BATCH_SIZE:
-            result = collection.insert_multi(documents)
+            result = _insert_multi_with_retry(collection, documents)
             print(
                 f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -56,7 +81,7 @@ def main(args):
             start_time = time.perf_counter()
 
     if documents:
-        result = collection.insert_multi(documents)
+        result = _insert_multi_with_retry(collection, documents)
         print(
             f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
