@@ -9,6 +9,7 @@ from functools import lru_cache
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
+from couchbase.exceptions import CouchbaseException
 from couchbase.options import (
     ClusterOptions,
     ClusterTimeoutOptions,
@@ -28,6 +29,8 @@ _CB_ENDPOINT = settings.couchbase_endpoint
 _CB_USER = settings.couchbase_user
 _CB_PASS = settings.couchbase_password
 _CB_TIMEOUT = settings.couchbase_timeout
+_CB_RETRY_ATTEMPTS = 3
+_CB_RETRY_DELAY = 5  # seconds
 
 # TODO: Refine timeout options
 _CB_CLUSTER = Cluster(
@@ -119,6 +122,49 @@ COLUMN_MAPPING = {
 
 def _get_cb_cluster():
     return _CB_CLUSTER
+
+
+def _execute_query_with_retry(query, query_options, func_name, query_uuid):
+    """Execute a Couchbase query with retry logic for transient errors.
+    
+    Args:
+        query: The N1QL query string
+        query_options: QueryOptions for the query
+        func_name: Name of the calling function for logging
+        query_uuid: UUID for logging
+        
+    Returns:
+        A tuple of (rows, results) where rows is a list of result rows
+        and results is the query results object (for metadata access)
+        
+    Raises:
+        CouchbaseException: If all retry attempts fail
+        ValueError: If _CB_RETRY_ATTEMPTS is less than 1
+    """
+    if _CB_RETRY_ATTEMPTS < 1:
+        raise ValueError("_CB_RETRY_ATTEMPTS must be at least 1")
+    
+    last_exception = None
+    for attempt in range(_CB_RETRY_ATTEMPTS):
+        try:
+            results = _get_cb_cluster().query(query, query_options)
+            # Force evaluation of the query by iterating through rows
+            rows = list(results.rows())
+            return rows, results
+        except CouchbaseException as e:
+            last_exception = e
+            if attempt < _CB_RETRY_ATTEMPTS - 1:
+                query_logger.warning(
+                    f"Retry {attempt + 1}/{_CB_RETRY_ATTEMPTS} for {func_name} - "
+                    f"UUID: {query_uuid} - Error: {str(e)}"
+                )
+                time.sleep(_CB_RETRY_DELAY)
+            else:
+                query_logger.error(
+                    f"All {_CB_RETRY_ATTEMPTS} retry attempts failed for {func_name} - "
+                    f"UUID: {query_uuid} - Error: {str(e)}"
+                )
+    raise last_exception
 
 
 def _get_scopes():
@@ -851,16 +897,18 @@ def get_total_seqs_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_total_seqs_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()
@@ -886,16 +934,18 @@ def get_total_bins_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_total_bins_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()
@@ -929,16 +979,18 @@ def get_animal_species_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_animal_species_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()
@@ -972,16 +1024,18 @@ def get_plant_species_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_plant_species_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()
@@ -1015,16 +1069,18 @@ def get_fungi_species_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_fungi_species_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()
@@ -1058,16 +1114,18 @@ def get_other_species_stat():
 
     start_time = time.perf_counter()
 
-    results = _get_cb_cluster().query(
+    rows, results = _execute_query_with_retry(
         query,
         QueryOptions(
             timeout=datetime.timedelta(seconds=_CB_TIMEOUT),
             metrics=True,
         ),
+        "get_other_species_stat",
+        query_uuid,
     )
 
     stat = 0
-    for row in results.rows():
+    for row in rows:
         stat = row["count"]
 
     end_time = time.perf_counter()

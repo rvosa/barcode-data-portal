@@ -11,9 +11,12 @@ from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
+from couchbase.exceptions import CouchbaseException
 from couchbase.options import ClusterOptions
 
 _BATCH_SIZE = 10000
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY = 5  # seconds
 
 
 def get_cluster(username, password, endpoint):
@@ -21,6 +24,28 @@ def get_cluster(username, password, endpoint):
     cluster = Cluster(endpoint, options)
     cluster.wait_until_ready(timedelta(seconds=5))
     return cluster
+
+
+def _remove_multi_with_retry(collection, ids):
+    """Execute remove_multi with retry logic for transient errors."""
+    last_exception = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            return collection.remove_multi(ids)
+        except CouchbaseException as e:
+            last_exception = e
+            if attempt < _RETRY_ATTEMPTS - 1:
+                print(
+                    f"Retry {attempt + 1}/{_RETRY_ATTEMPTS} for remove_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+                time.sleep(_RETRY_DELAY)
+            else:
+                print(
+                    f"All {_RETRY_ATTEMPTS} retry attempts failed for remove_multi - Error: {str(e)}",
+                    file=sys.stderr,
+                )
+    raise last_exception
 
 
 def main(args):
@@ -37,7 +62,7 @@ def main(args):
         ids.append(id.strip())
 
         if len(ids) >= _BATCH_SIZE:
-            result = collection.remove_multi(ids)
+            result = _remove_multi_with_retry(collection, ids)
             print(
                 f"Removed {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -50,7 +75,7 @@ def main(args):
             start_time = time.perf_counter()
 
     if ids:
-        result = collection.remove_multi(ids)
+        result = _remove_multi_with_retry(collection, ids)
         print(
             f"Removed {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
