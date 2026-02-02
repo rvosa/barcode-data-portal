@@ -65,6 +65,7 @@ On the cluster node, data files are organized under `/data`:
     ├── bold_singlepane_public_export.jsonl      # Primary BCDM data
     ├── bold_*_registry.jsonl                    # Extracted registries
     ├── *_summaries.jsonl                        # Generated summaries
+    ├── specimen_ranks.jsonl                     # Specimen ranking data
     ├── accepted_terms_combined.jsonl            # Combined accepted terms
     ├── accepted_terms_chunk_*.jsonl             # Chunked terms (for large datasets)
     ├── filtered_*_summaries.jsonl               # Filtered summaries (size limit handling)
@@ -96,21 +97,30 @@ docker exec -it compose-fastapi-app-1 bash
 # Data files are available at /import (mapped from /data/import on host)
 ```
 
-### Step 1: Extract Registry Files (on host, before entering container)
+### Step 1: Prepare Data Files
 
-Extract the registry files from `/data/import_registries` to `/data/import`:
+The `generate_and_sanitize_data.sh` script automatically downloads registry files from GitLab. Ensure the following are in place before running:
+
+**Required environment variables:**
+- `IMPORT_DIR` - Path to the import directory (e.g., `/import` inside the container)
+- `IMPORT_REGISTRY_TOKEN` - GitLab token for downloading registry files (should be in `.env`)
+
+**Required input file:**
+- `$IMPORT_DIR/bold_singlepane_public_export.jsonl` - Primary BCDM data
+
+**Note:** If registry files are already available locally (e.g., in `/data/import_registries`), you can extract them manually:
 
 ```bash
 # Run these commands on the host (not inside the container)
 REGISTRY_DIR="/data/import_registries"
-WORKING_DIR="/data/import"
+IMPORT_DIR="/data/import"
 
-gunzip -c $REGISTRY_DIR/bold_dataset_registry.jsonl.gz > $WORKING_DIR/bold_dataset_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_barcodecluster_registry.jsonl.gz > $WORKING_DIR/bold_barcodecluster_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_geopol_registry.jsonl.gz > $WORKING_DIR/bold_geopol_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_institution_registry.jsonl.gz > $WORKING_DIR/bold_institution_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_primer_registry.jsonl.gz > $WORKING_DIR/bold_primer_registry.jsonl
-gunzip -c $REGISTRY_DIR/bold_taxonomy_registry.jsonl.gz > $WORKING_DIR/bold_taxonomy_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_dataset_registry.jsonl.gz > $IMPORT_DIR/bold_dataset_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_barcodecluster_registry.jsonl.gz > $IMPORT_DIR/bold_barcodecluster_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_geopol_registry.jsonl.gz > $IMPORT_DIR/bold_geopol_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_institution_registry.jsonl.gz > $IMPORT_DIR/bold_institution_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_primer_registry.jsonl.gz > $IMPORT_DIR/bold_primer_registry.jsonl
+gunzip -c $REGISTRY_DIR/bold_taxonomy_registry.jsonl.gz > $IMPORT_DIR/bold_taxonomy_registry.jsonl
 ```
 
 ### Step 2: Generate Derived Data
@@ -119,8 +129,8 @@ Run `ETL/generate_and_sanitize_data.sh` inside the container. This script genera
 
 ```bash
 # Inside the container (working directory is /app)
-WORKING_DIR="/import"
-nohup bash ETL/generate_and_sanitize_data.sh $WORKING_DIR &
+export IMPORT_DIR="/import"
+nohup bash ETL/generate_and_sanitize_data.sh &
 
 # Check progress
 tail -f nohup.out
@@ -128,17 +138,20 @@ tail -f nohup.out
 
 **This script performs the following steps internally:**
 
-1. Applies BCDM policies to filter records (`ETL/apply_BCDM_policies.sh`)
-2. Extracts terms and tax/geo/inst summaries (`python ETL/extract_terms_and_summary_from_BCDM.py`)
-3. Extracts additional terms (`python ETL/extract_minimized_terms_with_inst_bins_ids_codes_BCDM.py`)
-4. Generates country summaries (`python ETL/extract_country_summary.py`)
-5. Generates institution summaries (`python ETL/extract_institution_summary.py`)
-6. Generates sequence run site summaries (`python ETL/extract_sequence_run_site_summary.py`)
-7. Generates BIN summaries (`python ETL/extract_bin_summary.py`)
-8. Generates dataset summaries (`python ETL/extract_dataset_summary.py`)
-9. Generates primer summaries (`python ETL/extract_primer_summary.py`)
-10. Sanitizes registry documents (filters empty names, handles UTF-8 encoding)
-11. Generates taxonomy summaries (`python ETL/extract_taxonomy_summary.py`)
+1. Downloads registry documents from GitLab (using `$IMPORT_REGISTRY_TOKEN`)
+2. Strips null values from the source BCDM file
+3. Applies BCDM policies to filter records (`ETL/apply_BCDM_policies.sh`)
+4. Extracts terms and tax/geo/inst summaries (`python ETL/extract_terms_and_summary_from_BCDM.py`)
+5. Extracts additional terms (`python ETL/extract_minimized_terms_with_inst_bins_ids_codes_BCDM.py`)
+6. Generates country summaries (`python ETL/extract_country_summary.py`)
+7. Generates institution summaries (`python ETL/extract_institution_summary.py`)
+8. Generates sequence run site summaries (`python ETL/extract_sequence_run_site_summary.py`)
+9. Generates BIN summaries (`python ETL/extract_bin_summary.py`)
+10. Generates dataset summaries (`python ETL/extract_dataset_summary.py`)
+11. Generates primer summaries (`python ETL/extract_primer_summary.py`)
+12. Generates specimen rank summaries (`python ETL/extract_rank_summary.py`)
+13. Sanitizes registry documents (filters empty names, handles UTF-8 encoding)
+14. Generates taxonomy summaries (`python ETL/extract_taxonomy_summary.py`)
 
 **Output files created:**
 - `tax_geo_inst_summaries.jsonl`
@@ -148,6 +161,7 @@ tail -f nohup.out
 - `bin_summaries.jsonl` + `filtered_bin_summaries.jsonl` + `reduced_bin_summaries.jsonl`
 - `dataset_summaries.jsonl` + `filtered_dataset_summaries.jsonl` + `reduced_dataset_summaries.jsonl`
 - `primer_summaries.jsonl` + `filtered_primer_summaries.jsonl` + `reduced_primer_summaries.jsonl`
+- `specimen_ranks.jsonl`
 - `taxonomy_summaries.jsonl`
 - `accepted_terms_combined.jsonl`
 
@@ -157,8 +171,8 @@ Run `ETL/couchbase-tools/bootstrap_couchbase.sh` inside the container. This scri
 
 ```bash
 # Inside the container (working directory is /app)
-WORKING_DIR="/import"
-nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh $WORKING_DIR &
+export IMPORT_DIR="/import"
+nohup bash ETL/couchbase-tools/bootstrap_couchbase.sh &
 
 # Check progress
 tail -f nohup.out
@@ -181,6 +195,7 @@ tail -f nohup.out
    - `primer_summaries.jsonl` → `DERIVED.primer_summaries`
    - `taxonomy_summaries.jsonl` → `DERIVED.taxonomy_summaries`
    - `accepted_terms_combined.jsonl` → `DERIVED.accepted_terms`
+   - `specimen_ranks.jsonl` → `DERIVED.specimen_ranks`
 
 4. **Load ancillary registry documents** (`python ETL/couchbase-tools/bulk_load_documents.py` for each):
    - `bold_dataset_registry.jsonl` → `ANCILLARY.datasets`
@@ -227,9 +242,10 @@ docker run --rm \
     -v /data/import:/import \
     -v $(pwd):/app \
     -w /app \
+    -e IMPORT_DIR=/import \
     --env-file .env \
     fastapi-app:latest \
-    bash ETL/couchbase-tools/bootstrap_couchbase.sh /import
+    bash ETL/couchbase-tools/bootstrap_couchbase.sh
 ```
 
 **Note:** The network name format is `<project-name>_<network-name>`. On the Naturalis server, the project name is `compose`, so the network is `compose_backend`.
@@ -253,7 +269,8 @@ DERIVED (bucket)
     ├── bin_summaries - BIN (Barcode Index Number) summaries
     ├── dataset_summaries - Dataset summaries
     ├── primer_summaries - Primer summaries
-    └── taxonomy_summaries - Taxonomy summaries
+    ├── taxonomy_summaries - Taxonomy summaries
+    └── specimen_ranks - Specimen ranking data
 
 ANCILLARY (bucket)
 └── _default (scope)
