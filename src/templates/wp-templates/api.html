@@ -238,7 +238,7 @@
                                                                 <p>The BOLD Portal API streamlines access to the DNA
                                                                     barcodes hosted on BOLD. It offers multiple endpoints
                                                                     (complete documentation available at
-                                                                    <a href="https://portal.boldsystems.org/api/docs">https://portal.boldsystems.org/api/docs</a>)
+                                                                    <a href="/api/docs">/api/docs</a>)
                                                                     and employs a three-stage query process to validate
                                                                     parameters, generate summaries, and stream matching records.</p>
                                                             </div>
@@ -600,8 +600,8 @@
                                                                     These query triplets are then directed to the <code>/api/summary</code> endpoint to retrieve aggregate barcode metadata.</p>
                                                                 <p>Using the example above, collecting the summary data for number of specimens in BOLD Portal for the 'Aves' of 'Argentina' would be as follows:
                                                                     <pre><code>
-                                                                        https://portal.boldsystems.org/api/query/preprocessor?query=tax:Aves;geo:Argentina<br>
-                                                                        https://portal.boldsystems.org/api/summary?query=tax:class:Aves;geo:country/ocean:Argentina&fields=specimens
+                                                                        /api/query/preprocessor?query=tax:Aves;geo:Argentina<br>
+                                                                        /api/summary?query=tax:class:Aves;geo:country/ocean:Argentina&fields=specimens
                                                                     </code></pre>
                                                                 </p>
                                                             </div>
@@ -646,9 +646,9 @@
                                                                     In the future, an automated system will allow for larger uploads without needing to make a request.</p>
                                                                 <p>Using the example above, collecting <strong>all</strong> the barcodes for the 'Aves' of 'Argentina' in the form of JSON documents that follow the BCDM data standard would be as follows:
                                                                     <pre><code>
-                                                                        https://portal.boldsystems.org/api/query/preprocessor?query=tax:Aves;geo:Argentina<br>
-                                                                        https://portal.boldsystems.org/api/query?query=tax:class:Aves;geo:country/ocean:Argentina&extent=full<br>
-                                                                        https://portal.boldsystems.org/api/documents/eAFLT823Ss4vzSspqtTPT05NzLNyLEpPzSvJzEu0LkmssErOSSwutnIsSy22TivNyQEAtOoSIQ==/download?format=json
+                                                                        /api/query/preprocessor?query=tax:Aves;geo:Argentina<br>
+                                                                        /api/query?query=tax:class:Aves;geo:country/ocean:Argentina&extent=full<br>
+                                                                        /api/documents/eAFLT823Ss4vzSspqtTPT05NzLNyLEpPzSvJzEu0LkmssErOSSwutnIsSy22TivNyQEAtOoSIQ==/download?format=json
                                                                     </code></pre>
                                                                 </p>
                                                             </div>
