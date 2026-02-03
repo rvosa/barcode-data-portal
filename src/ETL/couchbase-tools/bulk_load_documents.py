@@ -9,6 +9,7 @@ import logging
 import sys
 import time
 import ujson
+from collections import namedtuple
 from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
@@ -16,16 +17,14 @@ from couchbase.cluster import Cluster
 from couchbase.exceptions import AmbiguousTimeoutException, TimeoutException
 from couchbase.options import ClusterOptions, ClusterTimeoutOptions
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 10000
 _MAX_RETRIES = 3
 _RETRY_DELAY_SECONDS = 2
 _KV_TIMEOUT_SECONDS = 30
+
+MultiResult = namedtuple("MultiResult", ["results", "exceptions"])
 
 
 def get_cluster(username, password, endpoint):
@@ -76,7 +75,7 @@ def insert_with_retry(collection, documents, max_retries=_MAX_RETRIES):
                 all_exceptions[key] = result.exceptions[key]
             break
 
-    return type("MultiResult", (), {"results": all_results, "exceptions": all_exceptions})()
+    return MultiResult(results=all_results, exceptions=all_exceptions)
 
 
 def main(args):
@@ -129,6 +128,11 @@ def main(args):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--username", required=True, type=str)

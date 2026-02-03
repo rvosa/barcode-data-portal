@@ -10,10 +10,6 @@ import ujson
 
 from bulk_upsert_documents import upsert_document_collection
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 5000
@@ -89,6 +85,11 @@ def process_batch(documents, primary_key, indexed_column_set, cb_object, batch):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--file",
