@@ -5,23 +5,77 @@ use:
 """
 
 import argparse
+import logging
 import sys
 import time
 import ujson
+from collections import namedtuple
 from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
-from couchbase.options import ClusterOptions
+from couchbase.exceptions import AmbiguousTimeoutException, TimeoutException
+from couchbase.options import ClusterOptions, ClusterTimeoutOptions
+
+logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 10000
+_MAX_RETRIES = 3
+_RETRY_DELAY_SECONDS = 2
+_KV_TIMEOUT_SECONDS = 30
+
+MultiResult = namedtuple("MultiResult", ["results", "exceptions"])
 
 
 def get_cluster(username, password, endpoint):
-    options = ClusterOptions(PasswordAuthenticator(username, password))
+    options = ClusterOptions(
+        PasswordAuthenticator(username, password),
+        timeout_options=ClusterTimeoutOptions(
+            kv_timeout=timedelta(seconds=_KV_TIMEOUT_SECONDS),
+        ),
+    )
     cluster = Cluster(endpoint, options)
-    cluster.wait_until_ready(timedelta(seconds=5))
+    cluster.wait_until_ready(timedelta(seconds=30))
     return cluster
+
+
+def upsert_with_retry(collection, documents, max_retries=_MAX_RETRIES):
+    """Upsert documents with retry logic for transient timeout errors."""
+    remaining_docs = documents.copy()
+    all_results = {}
+    all_exceptions = {}
+
+    for attempt in range(max_retries):
+        if not remaining_docs:
+            break
+
+        result = collection.upsert_multi(remaining_docs)
+        all_results.update(result.results)
+
+        # Check for timeout exceptions that can be retried
+        retry_docs = {}
+        for key, exc in result.exceptions.items():
+            if isinstance(exc, (AmbiguousTimeoutException, TimeoutException)):
+                logger.warning(
+                    f"Timeout on attempt {attempt + 1}/{max_retries} for key: {key}"
+                )
+                retry_docs[key] = remaining_docs[key]
+            else:
+                all_exceptions[key] = exc
+
+        if retry_docs and attempt < max_retries - 1:
+            delay = _RETRY_DELAY_SECONDS * (2**attempt)
+            logger.info(f"Retrying {len(retry_docs)} documents after {delay}s delay")
+            time.sleep(delay)
+            remaining_docs = retry_docs
+        else:
+            # Final attempt - add remaining timeout exceptions
+            for key in retry_docs:
+                logger.error(f"Failed after {max_retries} retries for key: {key}")
+                all_exceptions[key] = result.exceptions[key]
+            break
+
+    return MultiResult(results=all_results, exceptions=all_exceptions)
 
 
 # invoked as a standalone script to upsert using a document file
@@ -40,7 +94,7 @@ def upsert_documents_from_file(file, collection, primary_key):
         documents[key] = document
 
         if len(documents) >= _BATCH_SIZE:
-            result = collection.upsert_multi(documents)
+            result = upsert_with_retry(collection, documents)
             print(
                 f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -53,7 +107,7 @@ def upsert_documents_from_file(file, collection, primary_key):
             start_time = time.perf_counter()
 
     if documents:
-        result = collection.upsert_multi(documents)
+        result = upsert_with_retry(collection, documents)
         print(
             f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
@@ -87,7 +141,7 @@ def upsert_document_collection(cb_object, upsert_documents):
     for key, document in upsert_documents.items():
         documents[key] = document  # to build batches
         if len(documents) >= _BATCH_SIZE:
-            result = collection.upsert_multi(documents)
+            result = upsert_with_retry(collection, documents)
             print(
                 f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -101,7 +155,7 @@ def upsert_document_collection(cb_object, upsert_documents):
 
     # those that remain after batching finishes
     if documents:
-        result = collection.upsert_multi(documents)
+        result = upsert_with_retry(collection, documents)
         print(
             f"Uploaded {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
@@ -130,6 +184,11 @@ def main(args):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--username", required=True, type=str)
