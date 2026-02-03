@@ -78,6 +78,7 @@ if couchbase-cli server-list -c 127.0.0.1 --username Administrator --password pa
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket DERIVED --create-collection _default.dataset_summaries
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket DERIVED --create-collection _default.primer_summaries
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket DERIVED --create-collection _default.taxonomy_summaries
+    couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket DERIVED --create-collection _default.specimen_ranks
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket ANCILLARY --create-collection _default.barcodeclusters
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket ANCILLARY --create-collection _default.datasets
     couchbase-cli collection-manage -c 127.0.0.1 -u Administrator -p password --bucket ANCILLARY --create-collection _default.publications
