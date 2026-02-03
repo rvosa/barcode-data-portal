@@ -192,6 +192,7 @@ def evaluate_species_level_id(record: Dict[str, Any]) -> int:
     species = record.get("species", "")
     id_rank = record.get("identification_rank", "")
     
+    # Valid ranks are defined as species-level or below per BCDM taxonomy model
     if not species or id_rank not in ("species", "subspecies"):
         return 0
     
@@ -251,6 +252,9 @@ def get_cb_ranking_by_processid(processid: str) -> Optional[Dict]:
     """Retrieve ranking data from the specimen_ranks collection."""
     bucket = dao.NAME_MAP["specimen_ranks"]["bucket"]
     collection = dao.NAME_MAP["specimen_ranks"]["collection"]
+    
+    # Obtain cluster connection from the application's connection pool (dao module)
+    cluster = dao._get_cb_cluster()
     
     query = f"""
         SELECT `{collection}`.*
