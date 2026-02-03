@@ -1,21 +1,36 @@
 import argparse
+import logging
 import sys
 from datetime import timedelta, datetime
 from couchbase.options import QueryOptions
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
-from couchbase.options import ClusterOptions
+from couchbase.options import ClusterOptions, ClusterTimeoutOptions
 import ujson
 
 from bulk_upsert_documents import upsert_document_collection
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 _BATCH_SIZE = 5000
+_KV_TIMEOUT_SECONDS = 30
+_QUERY_TIMEOUT_SECONDS = 120
 
 
 def get_cluster(username, password, endpoint):
-    options = ClusterOptions(PasswordAuthenticator(username, password))
+    options = ClusterOptions(
+        PasswordAuthenticator(username, password),
+        timeout_options=ClusterTimeoutOptions(
+            kv_timeout=timedelta(seconds=_KV_TIMEOUT_SECONDS),
+            query_timeout=timedelta(seconds=_QUERY_TIMEOUT_SECONDS),
+        ),
+    )
     cluster = Cluster(endpoint, options)
-    cluster.wait_until_ready(timedelta(seconds=5))
+    cluster.wait_until_ready(timedelta(seconds=30))
     return cluster
 
 

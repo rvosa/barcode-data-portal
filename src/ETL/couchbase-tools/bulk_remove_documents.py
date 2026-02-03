@@ -5,22 +5,78 @@ use:
 """
 
 import argparse
+import logging
 import sys
 import time
 from datetime import timedelta
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
-from couchbase.options import ClusterOptions
+from couchbase.exceptions import AmbiguousTimeoutException, TimeoutException
+from couchbase.options import ClusterOptions, ClusterTimeoutOptions
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 10000
+_MAX_RETRIES = 3
+_RETRY_DELAY_SECONDS = 2
+_KV_TIMEOUT_SECONDS = 30
 
 
 def get_cluster(username, password, endpoint):
-    options = ClusterOptions(PasswordAuthenticator(username, password))
+    options = ClusterOptions(
+        PasswordAuthenticator(username, password),
+        timeout_options=ClusterTimeoutOptions(
+            kv_timeout=timedelta(seconds=_KV_TIMEOUT_SECONDS),
+        ),
+    )
     cluster = Cluster(endpoint, options)
-    cluster.wait_until_ready(timedelta(seconds=5))
+    cluster.wait_until_ready(timedelta(seconds=30))
     return cluster
+
+
+def remove_with_retry(collection, ids, max_retries=_MAX_RETRIES):
+    """Remove documents with retry logic for transient timeout errors."""
+    remaining_ids = ids.copy()
+    all_results = {}
+    all_exceptions = {}
+
+    for attempt in range(max_retries):
+        if not remaining_ids:
+            break
+
+        result = collection.remove_multi(remaining_ids)
+        all_results.update(result.results)
+
+        # Check for timeout exceptions that can be retried
+        retry_ids = []
+        for key, exc in result.exceptions.items():
+            if isinstance(exc, (AmbiguousTimeoutException, TimeoutException)):
+                logger.warning(
+                    f"Timeout on attempt {attempt + 1}/{max_retries} for key: {key}"
+                )
+                retry_ids.append(key)
+            else:
+                all_exceptions[key] = exc
+
+        if retry_ids and attempt < max_retries - 1:
+            delay = _RETRY_DELAY_SECONDS * (2**attempt)
+            logger.info(f"Retrying {len(retry_ids)} documents after {delay}s delay")
+            time.sleep(delay)
+            remaining_ids = retry_ids
+        else:
+            # Final attempt - add remaining timeouts to exceptions
+            for key, exc in result.exceptions.items():
+                if isinstance(exc, (AmbiguousTimeoutException, TimeoutException)):
+                    logger.error(f"Failed after {max_retries} retries for key: {key}")
+                    all_exceptions[key] = exc
+            break
+
+    return type("MultiResult", (), {"results": all_results, "exceptions": all_exceptions})()
 
 
 def main(args):
@@ -37,7 +93,7 @@ def main(args):
         ids.append(id.strip())
 
         if len(ids) >= _BATCH_SIZE:
-            result = collection.remove_multi(ids)
+            result = remove_with_retry(collection, ids)
             print(
                 f"Removed {len(result.results)}\t{time.perf_counter() - start_time}",
                 file=sys.stderr,
@@ -50,7 +106,7 @@ def main(args):
             start_time = time.perf_counter()
 
     if ids:
-        result = collection.remove_multi(ids)
+        result = remove_with_retry(collection, ids)
         print(
             f"Removed {len(result.results)}\t{time.perf_counter() - start_time}",
             file=sys.stderr,
