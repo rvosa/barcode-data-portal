@@ -70,11 +70,10 @@ def insert_with_retry(collection, documents, max_retries=_MAX_RETRIES):
             time.sleep(delay)
             remaining_docs = retry_docs
         else:
-            # Final attempt - add remaining timeouts to exceptions
-            for key, exc in result.exceptions.items():
-                if isinstance(exc, (AmbiguousTimeoutException, TimeoutException)):
-                    logger.error(f"Failed after {max_retries} retries for key: {key}")
-                    all_exceptions[key] = exc
+            # Final attempt - add remaining timeout exceptions
+            for key in retry_docs:
+                logger.error(f"Failed after {max_retries} retries for key: {key}")
+                all_exceptions[key] = result.exceptions[key]
             break
 
     return type("MultiResult", (), {"results": all_results, "exceptions": all_exceptions})()
