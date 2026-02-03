@@ -106,6 +106,9 @@ CREATE INDEX idx_taxonomy_summaries_taxid IF NOT EXISTS ON `default`:`DERIVED`.`
 CREATE INDEX idx_taxonomy_summaries_parent_taxid IF NOT EXISTS ON `default`:`DERIVED`.`_default`.`taxonomy_summaries`(`parent_taxid`);
 CREATE INDEX idx_taxonomy_summaries_taxon IF NOT EXISTS ON `default`:`DERIVED`.`_default`.`taxonomy_summaries`(`taxon`);
 CREATE INDEX idx_taxonomy_summaries_rank_name IF NOT EXISTS ON `default`:`DERIVED`.`_default`.`taxonomy_summaries`(`rank_name`);
+-------BUCKET: DERIVED; COLLECTION: specimen_ranks
+CREATE PRIMARY INDEX IF NOT EXISTS ON `default`:`DERIVED`.`_default`.`specimen_ranks`;
+CREATE INDEX idx_specimen_ranks_processid IF NOT EXISTS ON `default`:`DERIVED`.`_default`.`specimen_ranks`(`processid`);
 
 -------BUCKET: ANCILLARY; COLLECTION: datasets
 CREATE PRIMARY INDEX IF NOT EXISTS ON `default`:`ANCILLARY`.`_default`.`datasets`;
