@@ -28,7 +28,7 @@ services:
       socketserver-logging:
         condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     # The name of the running Docker container
     container_name: fastapi-app-production
 
@@ -91,6 +91,18 @@ services:
     # The port that is exposed by the cache in the form EXTERNAL_PORT:INTERNAL_PORT
     ports:
       - "6379:6379"
+    # The custom Redis configuration file
+    volumes:
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    # The command to run Redis with the custom configuration file
+    command: redis-server /usr/local/etc/redis/redis.conf
+    # The command to check that the service is healthy
+    healthcheck:
+      test: redis-cli ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     # The Docker network used by the cache
     networks:
       - backend-production
